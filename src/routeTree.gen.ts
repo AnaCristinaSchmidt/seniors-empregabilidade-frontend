@@ -19,6 +19,8 @@ import { Route as EmpresaRouteImport } from './routes/empresa'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as AdministradorIndexRouteImport } from './routes/administrador.index'
+import { Route as AdministradorCandidatosRouteImport } from './routes/administrador.candidatos'
 import { Route as CandidatoIndexRouteImport } from './routes/candidato.index'
 import { Route as CandidatoCandidaturasRouteImport } from './routes/candidato.candidaturas'
 import { Route as CandidatoPerfilRouteImport } from './routes/candidato.perfil'
@@ -77,6 +79,16 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdministradorIndexRoute = AdministradorIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdministradorRoute,
+} as any)
+const AdministradorCandidatosRoute = AdministradorCandidatosRouteImport.update({
+  id: '/candidatos',
+  path: '/candidatos',
+  getParentRoute: () => AdministradorRoute,
+} as any)
 const CandidatoIndexRoute = CandidatoIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -115,7 +127,7 @@ const UsersRegisterRoute = UsersRegisterRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/administrador': typeof AdministradorRoute
+  '/administrador': typeof AdministradorRouteWithChildren
   '/cadastro': typeof CadastroRoute
   '/cadastro-empresa': typeof CadastroEmpresaRoute
   '/candidato': typeof CandidatoRouteWithChildren
@@ -124,35 +136,38 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/administrador/candidatos': typeof AdministradorCandidatosRoute
   '/candidato/candidaturas': typeof CandidatoCandidaturasRoute
   '/candidato/perfil': typeof CandidatoPerfilRoute
   '/candidato/vagas': typeof CandidatoVagasRoute
   '/empresa/vagas': typeof EmpresaVagasRoute
   '/users/register': typeof UsersRegisterRoute
+  '/administrador/': typeof AdministradorIndexRoute
   '/candidato/': typeof CandidatoIndexRoute
   '/empresa/': typeof EmpresaIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/administrador': typeof AdministradorRoute
   '/cadastro': typeof CadastroRoute
   '/cadastro-empresa': typeof CadastroEmpresaRoute
   '/email-verification': typeof EmailVerificationRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/administrador/candidatos': typeof AdministradorCandidatosRoute
   '/candidato/candidaturas': typeof CandidatoCandidaturasRoute
   '/candidato/perfil': typeof CandidatoPerfilRoute
   '/candidato/vagas': typeof CandidatoVagasRoute
   '/empresa/vagas': typeof EmpresaVagasRoute
   '/users/register': typeof UsersRegisterRoute
+  '/administrador': typeof AdministradorIndexRoute
   '/candidato': typeof CandidatoIndexRoute
   '/empresa': typeof EmpresaIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/administrador': typeof AdministradorRoute
+  '/administrador': typeof AdministradorRouteWithChildren
   '/cadastro': typeof CadastroRoute
   '/cadastro-empresa': typeof CadastroEmpresaRoute
   '/candidato': typeof CandidatoRouteWithChildren
@@ -161,11 +176,13 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/administrador/candidatos': typeof AdministradorCandidatosRoute
   '/candidato/candidaturas': typeof CandidatoCandidaturasRoute
   '/candidato/perfil': typeof CandidatoPerfilRoute
   '/candidato/vagas': typeof CandidatoVagasRoute
   '/empresa/vagas': typeof EmpresaVagasRoute
   '/users/register': typeof UsersRegisterRoute
+  '/administrador/': typeof AdministradorIndexRoute
   '/candidato/': typeof CandidatoIndexRoute
   '/empresa/': typeof EmpresaIndexRoute
 }
@@ -182,28 +199,31 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/reset-password'
+    | '/administrador/candidatos'
     | '/candidato/candidaturas'
     | '/candidato/perfil'
     | '/candidato/vagas'
     | '/empresa/vagas'
     | '/users/register'
+    | '/administrador/'
     | '/candidato/'
     | '/empresa/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/administrador'
     | '/cadastro'
     | '/cadastro-empresa'
     | '/email-verification'
     | '/forgot-password'
     | '/login'
     | '/reset-password'
+    | '/administrador/candidatos'
     | '/candidato/candidaturas'
     | '/candidato/perfil'
     | '/candidato/vagas'
     | '/empresa/vagas'
     | '/users/register'
+    | '/administrador'
     | '/candidato'
     | '/empresa'
   id:
@@ -218,18 +238,20 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/reset-password'
+    | '/administrador/candidatos'
     | '/candidato/candidaturas'
     | '/candidato/perfil'
     | '/candidato/vagas'
     | '/empresa/vagas'
     | '/users/register'
+    | '/administrador/'
     | '/candidato/'
     | '/empresa/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AdministradorRoute: typeof AdministradorRoute
+  AdministradorRoute: typeof AdministradorRouteWithChildren
   CadastroRoute: typeof CadastroRoute
   CadastroEmpresaRoute: typeof CadastroEmpresaRoute
   CandidatoRoute: typeof CandidatoRouteWithChildren
@@ -313,6 +335,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/administrador/': {
+      id: '/administrador/'
+      path: '/'
+      fullPath: '/administrador/'
+      preLoaderRoute: typeof AdministradorIndexRouteImport
+      parentRoute: typeof AdministradorRoute
+    }
+    '/administrador/candidatos': {
+      id: '/administrador/candidatos'
+      path: '/candidatos'
+      fullPath: '/administrador/candidatos'
+      preLoaderRoute: typeof AdministradorCandidatosRouteImport
+      parentRoute: typeof AdministradorRoute
+    }
     '/candidato/': {
       id: '/candidato/'
       path: '/'
@@ -365,6 +401,20 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AdministradorRouteChildren {
+  AdministradorCandidatosRoute: typeof AdministradorCandidatosRoute
+  AdministradorIndexRoute: typeof AdministradorIndexRoute
+}
+
+const AdministradorRouteChildren: AdministradorRouteChildren = {
+  AdministradorCandidatosRoute: AdministradorCandidatosRoute,
+  AdministradorIndexRoute: AdministradorIndexRoute,
+}
+
+const AdministradorRouteWithChildren = AdministradorRoute._addFileChildren(
+  AdministradorRouteChildren,
+)
+
 interface CandidatoRouteChildren {
   CandidatoCandidaturasRoute: typeof CandidatoCandidaturasRoute
   CandidatoPerfilRoute: typeof CandidatoPerfilRoute
@@ -398,7 +448,7 @@ const EmpresaRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AdministradorRoute: AdministradorRoute,
+  AdministradorRoute: AdministradorRouteWithChildren,
   CadastroRoute: CadastroRoute,
   CadastroEmpresaRoute: CadastroEmpresaRoute,
   CandidatoRoute: CandidatoRouteWithChildren,

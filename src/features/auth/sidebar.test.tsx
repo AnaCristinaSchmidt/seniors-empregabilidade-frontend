@@ -127,10 +127,14 @@ describe("Sidebar", () => {
     });
   });
 
-  it("shows the administrator nav items as static text", () => {
+  it("links Candidatos and keeps the other administrator items static", () => {
     render(<Sidebar userType="administrator" />);
 
-    ["Relatórios", "Empresas", "Candidatos", "Capacitação"].forEach((label) => {
+    expect(screen.getByRole("link", { name: "Candidatos" })).toHaveAttribute(
+      "href",
+      "/administrador/candidatos",
+    );
+    ["Relatórios", "Empresas", "Capacitação"].forEach((label) => {
       expect(screen.getByText(label)).toBeVisible();
       expect(
         screen.queryByRole("link", { name: label }),
