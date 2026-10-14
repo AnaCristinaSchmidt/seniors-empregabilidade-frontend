@@ -18,28 +18,40 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 
+import { startDownload } from "./certification-download";
 import { profileSaveErrorMessage } from "./professional-profile-errors";
 import {
   addProfileSkill,
+  CERTIFICATE_ACCEPT,
+  certificateFileProblem,
+  certificationValuesSchema,
+  createCertification,
   createEducation,
   createExperience,
+  deleteCertificationById,
+  deleteCertificationDocument,
   deleteEducationById,
   deleteExperienceById,
   educationValuesSchema,
+  fetchCertificationDocumentUrl,
   experienceValuesSchema,
   professionalProfileQueryKey,
   removeProfileSkill,
   searchSkillCatalog,
   skillCatalogQueryKey,
+  updateCertificationById,
   updateEducationById,
   updateExperienceById,
+  uploadCertificationDocument,
 } from "./professional-profile";
 import { CompanyBadge } from "@/components/ui/company-badge";
 import { formatExperiencePeriod, getYear } from "./profile-date-utils";
 import type {
+  Certification,
   Education,
   Experience,
   ProfessionalProfile,
@@ -134,6 +146,9 @@ function EditProfileForm({
     profile.experiences,
   );
   const [education, setEducation] = useState<Education[]>(profile.education);
+  const [certifications, setCertifications] = useState<Certification[]>(
+    profile.certifications,
+  );
   const [skills, setSkills] = useState<Skill[]>(profile.skills);
   const [justSaved, setJustSaved] = useState(false);
   const closeTimeoutRef = useRef<number | null>(null);
@@ -272,6 +287,10 @@ function EditProfileForm({
 
       <ExperienceFieldset experiences={experiences} onChange={setExperiences} />
       <EducationFieldset education={education} onChange={setEducation} />
+      <CertificationFieldset
+        certifications={certifications}
+        onChange={setCertifications}
+      />
       <SkillsFieldset skills={skills} onChange={setSkills} />
 
       <DialogFooter>
@@ -791,7 +810,7 @@ function EducationFieldset({
   return (
     <div>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <SectionHeading>Formação e certificação</SectionHeading>
+        <SectionHeading>Formação</SectionHeading>
         <Button
           type="button"
           variant="outline"
@@ -851,6 +870,379 @@ function EducationFieldset({
               </div>
             );
           })}
+          {editingId === "new" ? renderEditForm("new") : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- Certificações ----------
+
+interface CertificationDraft {
+  name: string;
+  issuer: string;
+  issued_date: string;
+  expiration_date: string;
+}
+
+function draftFromCertification(item?: Certification): CertificationDraft {
+  return {
+    name: item?.name ?? "",
+    issuer: item?.issuer ?? "",
+    issued_date: item?.issued_date ?? "",
+    expiration_date: item?.expiration_date ?? "",
+  };
+}
+
+function certificationDraftToValues(draft: CertificationDraft) {
+  return {
+    name: draft.name.trim(),
+    issuer: draft.issuer.trim() || null,
+    issued_date: draft.issued_date || null,
+    expiration_date: draft.expiration_date || null,
+  };
+}
+
+function formatDocumentSize(bytes: number): string {
+  return bytes < 1024 * 1024
+    ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+    : `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
+}
+
+function CertificationFieldset({
+  certifications,
+  onChange,
+}: {
+  certifications: Certification[];
+  onChange: (certifications: Certification[]) => void;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<CertificationDraft>(
+    draftFromCertification(),
+  );
+  const [file, setFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [itemError, setItemError] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+
+  const createMutation = useMutation({ mutationFn: createCertification });
+  const updateMutation = useMutation({
+    mutationFn: ({
+      id,
+      values,
+    }: {
+      id: string;
+      values: ReturnType<typeof certificationDraftToValues>;
+    }) => updateCertificationById(id, values),
+  });
+  const uploadMutation = useMutation({
+    mutationFn: ({ id, document }: { id: string; document: File }) =>
+      uploadCertificationDocument(id, document, setUploadProgress),
+    onSettled: () => setUploadProgress(null),
+  });
+  const removeDocumentMutation = useMutation({
+    mutationFn: deleteCertificationDocument,
+  });
+  const deleteMutation = useMutation({ mutationFn: deleteCertificationById });
+  const downloadMutation = useMutation({
+    mutationFn: fetchCertificationDocumentUrl,
+    onSuccess: (url) => startDownload(url),
+  });
+
+  const isSaving =
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    uploadMutation.isPending ||
+    removeDocumentMutation.isPending;
+  const isBusy = isSaving || deleteMutation.isPending;
+
+  function openForm(item?: Certification) {
+    setDraft(draftFromCertification(item));
+    setFile(null);
+    setEditingId(item?.id ?? "new");
+    setItemError(null);
+    setListError(null);
+  }
+
+  function replace(list: Certification[], saved: Certification) {
+    return list.some((item) => item.id === saved.id)
+      ? list.map((item) => (item.id === saved.id ? saved : item))
+      : [...list, saved];
+  }
+
+  async function saveEdit(id: string) {
+    setItemError(null);
+    const parsed = certificationValuesSchema.safeParse(
+      certificationDraftToValues(draft),
+    );
+    if (!parsed.success) {
+      setItemError(parsed.error.issues[0]?.message ?? "Dados inválidos.");
+      return;
+    }
+    const fileProblem = file ? certificateFileProblem(file) : null;
+    if (fileProblem) {
+      setItemError(fileProblem);
+      return;
+    }
+    let list = certifications;
+    try {
+      let saved =
+        id === "new"
+          ? await createMutation.mutateAsync(parsed.data)
+          : await updateMutation.mutateAsync({ id, values: parsed.data });
+      list = replace(list, saved);
+      onChange(list);
+      // From here on a retry edits the saved item instead of creating another.
+      setEditingId(saved.id);
+      if (file) {
+        saved = await uploadMutation.mutateAsync({
+          id: saved.id,
+          document: file,
+        });
+        onChange(replace(list, saved));
+      }
+      setFile(null);
+      setEditingId(null);
+    } catch (error) {
+      setItemError(profileSaveErrorMessage(error));
+    }
+  }
+
+  async function removeDocument(item: Certification) {
+    setItemError(null);
+    try {
+      await removeDocumentMutation.mutateAsync(item.id);
+      onChange(replace(certifications, { ...item, document: null }));
+    } catch (error) {
+      setItemError(profileSaveErrorMessage(error));
+    }
+  }
+
+  async function remove(id: string) {
+    setListError(null);
+    try {
+      await deleteMutation.mutateAsync(id);
+      onChange(certifications.filter((item) => item.id !== id));
+    } catch (error) {
+      setListError(profileSaveErrorMessage(error));
+    }
+  }
+
+  function download(id: string) {
+    setListError(null);
+    downloadMutation.mutate(id, {
+      onError: (error) => setListError(profileSaveErrorMessage(error)),
+    });
+  }
+
+  function renderEditForm(id: string) {
+    const current = certifications.find((item) => item.id === id);
+    return (
+      <div className="flex flex-col gap-3 rounded-lg border border-ring p-4">
+        <Field>
+          <FieldLabel htmlFor={`cert-name-${id}`}>
+            Nome da certificação
+          </FieldLabel>
+          <Input
+            id={`cert-name-${id}`}
+            value={draft.name}
+            onChange={(event) =>
+              setDraft({ ...draft, name: event.target.value })
+            }
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`cert-issuer-${id}`}>
+            Instituição emissora
+          </FieldLabel>
+          <Input
+            id={`cert-issuer-${id}`}
+            value={draft.issuer}
+            onChange={(event) =>
+              setDraft({ ...draft, issuer: event.target.value })
+            }
+          />
+        </Field>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor={`cert-issued-${id}`}>
+              Data de emissão
+            </FieldLabel>
+            <Input
+              id={`cert-issued-${id}`}
+              type="date"
+              value={draft.issued_date}
+              onChange={(event) =>
+                setDraft({ ...draft, issued_date: event.target.value })
+              }
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`cert-expiration-${id}`}>
+              Validade (deixe em branco se não expira)
+            </FieldLabel>
+            <Input
+              id={`cert-expiration-${id}`}
+              type="date"
+              value={draft.expiration_date}
+              onChange={(event) =>
+                setDraft({ ...draft, expiration_date: event.target.value })
+              }
+            />
+          </Field>
+        </div>
+        <Field>
+          <FieldLabel htmlFor={`cert-file-${id}`}>
+            {current?.document ? "Trocar comprovante" : "Comprovante"}
+          </FieldLabel>
+          <Input
+            id={`cert-file-${id}`}
+            type="file"
+            accept={CERTIFICATE_ACCEPT}
+            aria-describedby={`cert-file-hint-${id}`}
+            className="py-2.5"
+            onChange={(event) => {
+              setFile(event.target.files?.[0] ?? null);
+              setItemError(null);
+            }}
+          />
+          <FieldDescription id={`cert-file-hint-${id}`}>
+            PDF, PNG ou JPG, até 5 MB. Opcional.
+          </FieldDescription>
+        </Field>
+        {current?.document ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted px-4 py-3">
+            <p className="text-base text-foreground">
+              Arquivo atual: {current.document.filename}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isSaving}
+              onClick={() => void removeDocument(current)}
+            >
+              Remover comprovante
+            </Button>
+          </div>
+        ) : null}
+        {uploadProgress !== null ? (
+          <Progress value={uploadProgress} aria-label="Envio do comprovante">
+            <p role="status" className="text-base text-foreground">
+              Enviando comprovante... {uploadProgress}%
+            </p>
+          </Progress>
+        ) : null}
+        {itemError ? (
+          <p role="alert" className="text-base text-destructive">
+            {itemError}
+          </p>
+        ) : null}
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isSaving}
+            onClick={() => setEditingId(null)}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            disabled={isSaving}
+            onClick={() => void saveEdit(id)}
+          >
+            {isSaving ? "Salvando..." : "Concluir"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <SectionHeading>Certificações</SectionHeading>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => openForm()}
+          disabled={editingId !== null}
+        >
+          Adicionar certificação
+        </Button>
+      </div>
+      {listError ? (
+        <p role="alert" className="mb-3 text-base text-destructive">
+          {listError}
+        </p>
+      ) : null}
+      {certifications.length === 0 && editingId !== "new" ? (
+        <p className="text-lg text-muted-foreground">
+          Nenhuma certificação cadastrada ainda.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {certifications.map((item) =>
+            editingId === item.id ? (
+              <div key={item.id}>{renderEditForm(item.id)}</div>
+            ) : (
+              <div
+                key={item.id}
+                className="flex flex-col gap-3 rounded-lg border border-border p-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <p className="text-lg font-bold text-foreground">
+                    {item.name}
+                  </p>
+                  <p className="text-base text-muted-foreground">
+                    {[
+                      item.issuer,
+                      item.issued_date ? getYear(item.issued_date) : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                  <p className="text-base text-muted-foreground">
+                    {item.document
+                      ? `Comprovante: ${item.document.filename} (${formatDocumentSize(item.document.size_bytes)})`
+                      : "Sem comprovante"}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  {item.document ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={downloadMutation.isPending}
+                      aria-label={`Baixar comprovante de ${item.name}`}
+                      onClick={() => download(item.id)}
+                    >
+                      Baixar
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={editingId !== null || isBusy}
+                    aria-label={`Editar certificação ${item.name}`}
+                    onClick={() => openForm(item)}
+                  >
+                    Editar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={editingId !== null || isBusy}
+                    aria-label={`Remover certificação ${item.name}`}
+                    onClick={() => void remove(item.id)}
+                  >
+                    Remover
+                  </Button>
+                </div>
+              </div>
+            ),
+          )}
           {editingId === "new" ? renderEditForm("new") : null}
         </div>
       )}

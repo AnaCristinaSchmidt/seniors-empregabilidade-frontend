@@ -5,10 +5,12 @@ import { apiClient } from "@/lib/api-client";
 import { ApiError } from "@/lib/api-error";
 
 import {
+  certificationSchema,
   experienceSchema,
   educationSchema,
   professionalProfileSchema,
   skillSchema,
+  type Certification,
   type Education,
   type Experience,
   type ProfessionalProfile,
@@ -181,6 +183,141 @@ export async function updateEducationById(
 
 export async function deleteEducationById(id: string): Promise<void> {
   await apiClient.delete(`${PROFILE_ENDPOINT}/education/${id}`);
+}
+
+// ---------- Certificações ----------
+// Mirrors app/candidates/schemas/certification.py; the server decides the file type by content.
+
+const certificationText = z
+  .string()
+  .trim()
+  .min(1, "Campo obrigatório.")
+  .max(150, "Máximo de 150 caracteres.");
+
+export const certificationValuesSchema = z
+  .object({
+    name: certificationText,
+    issuer: certificationText.nullable(),
+    issued_date: z.string().nullable(),
+    expiration_date: z.string().nullable(),
+  })
+  .refine(
+    (values) =>
+      !values.issued_date ||
+      !values.expiration_date ||
+      values.expiration_date >= values.issued_date,
+    { message: "A validade não pode ser anterior à data de emissão." },
+  );
+
+export type CertificationValues = z.infer<typeof certificationValuesSchema>;
+
+export const MAX_CERTIFICATE_BYTES = 5 * 1024 * 1024;
+export const CERTIFICATE_ACCEPT =
+  ".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg";
+const CERTIFICATE_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+]);
+const CERTIFICATE_EXTENSION = /\.(pdf|png|jpe?g)$/i;
+
+/** Returns why the file cannot be sent, or null when it may be uploaded. */
+export function certificateFileProblem(file: File): string | null {
+  if (
+    !CERTIFICATE_TYPES.has(file.type) &&
+    !CERTIFICATE_EXTENSION.test(file.name)
+  ) {
+    return "Envie um arquivo PDF, PNG ou JPG.";
+  }
+  if (file.size > MAX_CERTIFICATE_BYTES) {
+    return "O arquivo pode ter no máximo 5 MB.";
+  }
+  return null;
+}
+
+function parseCertification(data: unknown): Certification {
+  const parsed = certificationSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new ApiError({
+      message: "Não foi possível validar a certificação.",
+      code: "invalid_certification_response",
+    });
+  }
+  return parsed.data;
+}
+
+export async function createCertification(
+  values: CertificationValues,
+): Promise<Certification> {
+  const response = await apiClient.post<unknown>(
+    `${PROFILE_ENDPOINT}/certifications`,
+    values,
+  );
+  return parseCertification(response.data);
+}
+
+export async function updateCertificationById(
+  id: string,
+  values: CertificationValues,
+): Promise<Certification> {
+  const response = await apiClient.patch<unknown>(
+    `${PROFILE_ENDPOINT}/certifications/${id}`,
+    values,
+  );
+  return parseCertification(response.data);
+}
+
+export async function deleteCertificationById(id: string): Promise<void> {
+  await apiClient.delete(`${PROFILE_ENDPOINT}/certifications/${id}`);
+}
+
+export async function uploadCertificationDocument(
+  id: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<Certification> {
+  const body = new FormData();
+  body.append("file", file);
+  const response = await apiClient.put<unknown>(
+    `${PROFILE_ENDPOINT}/certifications/${id}/document`,
+    body,
+    {
+      // A slow connection may need more than the default 15 s for 5 MB.
+      timeout: 120_000,
+      onUploadProgress: (event) => {
+        if (onProgress && event.total) {
+          onProgress(Math.round((event.loaded / event.total) * 100));
+        }
+      },
+    },
+  );
+  return parseCertification(response.data);
+}
+
+export async function deleteCertificationDocument(id: string): Promise<void> {
+  await apiClient.delete(`${PROFILE_ENDPOINT}/certifications/${id}/document`);
+}
+
+const documentLinkSchema = z.object({
+  url: z.string().url(),
+  expires_at: z.string(),
+});
+
+/** A pre-signed link that downloads the document; it expires in minutes. */
+export async function fetchCertificationDocumentUrl(
+  id: string,
+): Promise<string> {
+  const response = await apiClient.get<unknown>(
+    `${PROFILE_ENDPOINT}/certifications/${id}/document`,
+  );
+  const parsed = documentLinkSchema.safeParse(response.data);
+  if (!parsed.success) {
+    throw new ApiError({
+      message: "Não foi possível abrir o comprovante.",
+      code: "invalid_document_link_response",
+    });
+  }
+  return parsed.data.url;
 }
 
 // ---------- Habilidades ----------

@@ -22,6 +22,15 @@ const saveMessages: Record<string, string> = {
     "Esta experiência não existe mais. Feche e abra o perfil novamente.",
   education_not_found:
     "Esta formação não existe mais. Feche e abra o perfil novamente.",
+  invalid_certification_period:
+    "A validade não pode ser anterior à data de emissão.",
+  certification_not_found:
+    "Esta certificação não existe mais. Feche e abra o perfil novamente.",
+  certification_document_not_found: "Esta certificação não tem comprovante.",
+  unsupported_document_type: "Envie um arquivo PDF, PNG ou JPG.",
+  document_too_large: "O arquivo pode ter no máximo 5 MB.",
+  document_storage_unavailable:
+    "O envio de arquivos está indisponível agora. Tente novamente mais tarde.",
   skill_not_found: "Esta habilidade não está mais disponível no catálogo.",
   skill_already_added: "Esta habilidade já está no seu perfil.",
 };

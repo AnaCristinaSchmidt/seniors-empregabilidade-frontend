@@ -18,6 +18,22 @@ export const educationSchema = z.object({
   end_date: z.string().nullable(),
 });
 
+export const certificationDocumentSchema = z.object({
+  filename: z.string(),
+  content_type: z.string(),
+  size_bytes: z.number().int(),
+  uploaded_at: z.string(),
+});
+
+export const certificationSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  issuer: z.string().nullable(),
+  issued_date: z.string().nullable(),
+  expiration_date: z.string().nullable(),
+  document: certificationDocumentSchema.nullable(),
+});
+
 export const skillSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -36,10 +52,14 @@ export const professionalProfileSchema = z.object({
   photo_url: z.string().nullish(),
   experiences: z.array(experienceSchema),
   education: z.array(educationSchema),
+  // Defaults to empty while a backend without certifications is deployed.
+  certifications: z.array(certificationSchema).default([]),
   skills: z.array(skillSchema),
 });
 
 export type Experience = z.infer<typeof experienceSchema>;
 export type Education = z.infer<typeof educationSchema>;
+export type Certification = z.infer<typeof certificationSchema>;
+export type CertificationDocument = z.infer<typeof certificationDocumentSchema>;
 export type Skill = z.infer<typeof skillSchema>;
 export type ProfessionalProfile = z.infer<typeof professionalProfileSchema>;

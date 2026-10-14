@@ -32,6 +32,7 @@ const validProfile = {
       end_date: "2011-12-01",
     },
   ],
+  certifications: [],
   skills: [
     { id: "s1", name: "Liderança", type: "soft" },
     { id: "s2", name: "Logística", type: "hard" },

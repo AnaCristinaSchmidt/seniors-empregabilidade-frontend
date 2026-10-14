@@ -1,13 +1,21 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 
+import { startDownload } from "./certification-download";
 import { EditProfileModal } from "./edit-profile-modal";
-import { professionalProfileQueryOptions } from "./professional-profile";
-import { profileErrorMessage } from "./professional-profile-errors";
+import {
+  fetchCertificationDocumentUrl,
+  professionalProfileQueryOptions,
+} from "./professional-profile";
+import {
+  profileErrorMessage,
+  profileSaveErrorMessage,
+} from "./professional-profile-errors";
 import { formatExperiencePeriod, getYear } from "./profile-date-utils";
 import type {
+  Certification,
   Education,
   Experience,
   ProfessionalProfile,
@@ -74,6 +82,9 @@ export function ProfileView() {
         <div className="flex flex-1 flex-col gap-6">
           <section className="rounded-lg border border-border bg-background p-6">
             <EducationSection education={profile.education} />
+          </section>
+          <section className="rounded-lg border border-border bg-background p-6">
+            <CertificationSection certifications={profile.certifications} />
           </section>
           <section className="rounded-lg border border-border bg-background p-6">
             <SkillsSection skills={profile.skills} />
@@ -194,7 +205,7 @@ function ExperienceItem({ experience }: { experience: Experience }) {
 function EducationSection({ education }: { education: Education[] }) {
   return (
     <div>
-      <SectionTitle>Formação e certificação</SectionTitle>
+      <SectionTitle>Formação</SectionTitle>
       {education.length === 0 ? (
         <EmptyState message="Nenhuma formação cadastrada ainda." />
       ) : (
@@ -227,6 +238,65 @@ function EducationItem({ education }: { education: Education }) {
       </p>
     </div>
   );
+}
+
+function CertificationSection({
+  certifications,
+}: {
+  certifications: Certification[];
+}) {
+  const download = useMutation({
+    mutationFn: fetchCertificationDocumentUrl,
+    onSuccess: (url) => startDownload(url),
+  });
+
+  return (
+    <div>
+      <SectionTitle>Certificações</SectionTitle>
+      {download.isError ? (
+        <p role="alert" className="mb-3 text-base text-destructive">
+          {profileSaveErrorMessage(download.error)}
+        </p>
+      ) : null}
+      {certifications.length === 0 ? (
+        <EmptyState message="Nenhuma certificação cadastrada ainda." />
+      ) : (
+        <ul className="flex flex-col gap-4">
+          {certifications.map((item) => (
+            <li key={item.id}>
+              <p className="text-lg font-bold text-foreground">{item.name}</p>
+              <p className="text-base text-muted-foreground">
+                {[item.issuer, formatValidity(item)]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+              {item.document ? (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto px-0"
+                  disabled={download.isPending}
+                  aria-label={`Baixar comprovante de ${item.name}`}
+                  onClick={() => download.mutate(item.id)}
+                >
+                  Baixar comprovante
+                </Button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function formatValidity(item: Certification): string | null {
+  const issued = item.issued_date ? getYear(item.issued_date) : null;
+  if (!item.expiration_date) {
+    return issued ? `Emitida em ${issued}` : null;
+  }
+  const expires = getYear(item.expiration_date);
+  return issued ? `${issued} – ${expires}` : `Válida até ${expires}`;
 }
 
 function SkillsSection({ skills }: { skills: Skill[] }) {

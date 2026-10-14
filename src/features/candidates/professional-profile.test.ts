@@ -4,14 +4,28 @@ import { apiClient } from "@/lib/api-client";
 
 import {
   addProfileSkill,
+  certificateFileProblem,
+  certificationValuesSchema,
+  createCertification,
+  deleteCertificationById,
+  deleteCertificationDocument,
+  fetchCertificationDocumentUrl,
   fetchProfessionalProfile,
   professionalProfileQueryKey,
   removeProfileSkill,
   searchSkillCatalog,
+  updateCertificationById,
+  uploadCertificationDocument,
 } from "./professional-profile";
 
 vi.mock("@/lib/api-client", () => ({
-  apiClient: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
+  apiClient: {
+    get: vi.fn(),
+    post: vi.fn(),
+    patch: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+  },
 }));
 
 const validProfile = {
@@ -26,6 +40,7 @@ const validProfile = {
   summary: "Profissional de operações e logística.",
   experiences: [],
   education: [],
+  certifications: [],
   skills: [],
 };
 
@@ -37,6 +52,18 @@ describe("fetchProfessionalProfile", () => {
 
     await expect(fetchProfessionalProfile()).resolves.toEqual(validProfile);
     expect(get).toHaveBeenCalledWith("/professionals/me", {});
+  });
+
+  it("treats a profile from a backend without certifications as having none", async () => {
+    const withoutCertifications: Record<string, unknown> = { ...validProfile };
+    delete withoutCertifications.certifications;
+    vi.spyOn(apiClient, "get").mockResolvedValueOnce({
+      data: withoutCertifications,
+    });
+
+    await expect(fetchProfessionalProfile()).resolves.toMatchObject({
+      certifications: [],
+    });
   });
 
   it("rejects when the response does not match the expected shape", async () => {
@@ -104,5 +131,157 @@ describe("skill catalog and profile skills", () => {
     await removeProfileSkill("s2");
 
     expect(remove).toHaveBeenCalledWith("/professionals/me/skills/s2");
+  });
+});
+
+const certification = {
+  id: "c1",
+  name: "NR-35",
+  issuer: "SENAI",
+  issued_date: "2020-03-01",
+  expiration_date: null,
+  document: {
+    filename: "nr35.pdf",
+    content_type: "application/pdf",
+    size_bytes: 2048,
+    uploaded_at: "2026-10-13T12:00:00Z",
+  },
+};
+const certificationValues = {
+  name: "NR-35",
+  issuer: "SENAI",
+  issued_date: "2020-03-01",
+  expiration_date: null,
+};
+
+describe("certifications", () => {
+  it("creates, updates and deletes through the certification endpoints", async () => {
+    const post = vi
+      .spyOn(apiClient, "post")
+      .mockResolvedValueOnce({ data: certification });
+    const patch = vi
+      .spyOn(apiClient, "patch")
+      .mockResolvedValueOnce({ data: certification });
+    const remove = vi.spyOn(apiClient, "delete").mockResolvedValue({});
+
+    await expect(createCertification(certificationValues)).resolves.toEqual(
+      certification,
+    );
+    await expect(
+      updateCertificationById("c1", certificationValues),
+    ).resolves.toEqual(certification);
+    await deleteCertificationById("c1");
+    await deleteCertificationDocument("c1");
+
+    expect(post).toHaveBeenCalledWith(
+      "/professionals/me/certifications",
+      certificationValues,
+    );
+    expect(patch).toHaveBeenCalledWith(
+      "/professionals/me/certifications/c1",
+      certificationValues,
+    );
+    expect(remove).toHaveBeenCalledWith("/professionals/me/certifications/c1");
+    expect(remove).toHaveBeenCalledWith(
+      "/professionals/me/certifications/c1/document",
+    );
+  });
+
+  it("rejects a certification response with an unexpected shape", async () => {
+    vi.spyOn(apiClient, "post").mockResolvedValueOnce({ data: { id: "c1" } });
+
+    await expect(
+      createCertification(certificationValues),
+    ).rejects.toMatchObject({ code: "invalid_certification_response" });
+  });
+
+  it("uploads the document as the multipart file field and reports progress", async () => {
+    const put = vi
+      .spyOn(apiClient, "put")
+      .mockImplementationOnce((_url, _body, config) => {
+        config?.onUploadProgress?.({
+          loaded: 50,
+          total: 200,
+          bytes: 50,
+        } as never);
+        config?.onUploadProgress?.({ loaded: 10, bytes: 10 } as never);
+        return Promise.resolve({ data: certification });
+      });
+    const progress = vi.fn();
+    const file = new File(["%PDF-"], "nr35.pdf", { type: "application/pdf" });
+
+    await uploadCertificationDocument("c1", file, progress);
+
+    const [url, body] = put.mock.calls[0]!;
+    expect(url).toBe("/professionals/me/certifications/c1/document");
+    expect((body as FormData).get("file")).toBe(file);
+    expect(progress).toHaveBeenCalledExactlyOnceWith(25);
+  });
+
+  it("returns the download link of a document", async () => {
+    const get = vi.spyOn(apiClient, "get").mockResolvedValueOnce({
+      data: {
+        url: "https://storage.example.invalid/c1?sig=1",
+        expires_at: "2026-10-13T12:05:00Z",
+      },
+    });
+
+    await expect(fetchCertificationDocumentUrl("c1")).resolves.toBe(
+      "https://storage.example.invalid/c1?sig=1",
+    );
+    expect(get).toHaveBeenCalledWith(
+      "/professionals/me/certifications/c1/document",
+    );
+  });
+
+  it("rejects a download link response without a URL", async () => {
+    vi.spyOn(apiClient, "get").mockResolvedValueOnce({ data: { url: "" } });
+
+    await expect(fetchCertificationDocumentUrl("c1")).rejects.toMatchObject({
+      code: "invalid_document_link_response",
+    });
+  });
+
+  it("requires a name and an expiration on or after the issue date", () => {
+    expect(
+      certificationValuesSchema.safeParse({ ...certificationValues, name: " " })
+        .success,
+    ).toBe(false);
+    expect(
+      certificationValuesSchema.safeParse({
+        ...certificationValues,
+        expiration_date: "2019-01-01",
+      }).error?.issues[0]?.message,
+    ).toBe("A validade não pode ser anterior à data de emissão.");
+    expect(
+      certificationValuesSchema.safeParse({
+        ...certificationValues,
+        expiration_date: "2020-03-01",
+      }).success,
+    ).toBe(true);
+  });
+});
+
+describe("certificateFileProblem", () => {
+  it("accepts PDF, PNG and JPG up to 5 MB", () => {
+    expect(
+      certificateFileProblem(
+        new File(["x"], "a.pdf", { type: "application/pdf" }),
+      ),
+    ).toBeNull();
+    expect(certificateFileProblem(new File(["x"], "foto.JPEG"))).toBeNull();
+  });
+
+  it("rejects other types and files over 5 MB", () => {
+    expect(
+      certificateFileProblem(
+        new File(["x"], "a.docx", { type: "application/msword" }),
+      ),
+    ).toBe("Envie um arquivo PDF, PNG ou JPG.");
+    const big = new File(["x"], "a.pdf", { type: "application/pdf" });
+    Object.defineProperty(big, "size", { value: 5 * 1024 * 1024 + 1 });
+    expect(certificateFileProblem(big)).toBe(
+      "O arquivo pode ter no máximo 5 MB.",
+    );
   });
 });

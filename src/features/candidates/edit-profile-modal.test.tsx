@@ -14,12 +14,20 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "@/lib/api-client";
 import { ApiError } from "@/lib/api-error";
 
+import { startDownload } from "./certification-download";
 import { EditProfileModal } from "./edit-profile-modal";
 import type { ProfessionalProfile } from "./professional-profile-schema";
 
 vi.mock("@/lib/api-client", () => ({
-  apiClient: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  apiClient: {
+    get: vi.fn(),
+    post: vi.fn(),
+    patch: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+  },
 }));
+vi.mock("./certification-download", () => ({ startDownload: vi.fn() }));
 
 const baseProfile: ProfessionalProfile = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -33,6 +41,7 @@ const baseProfile: ProfessionalProfile = {
   summary: "Profissional de operações e logística.",
   experiences: [],
   education: [],
+  certifications: [],
   skills: [{ id: "s1", name: "Liderança", type: "soft" }],
 };
 
@@ -514,5 +523,260 @@ describe("EditProfileModal", () => {
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: profileQueryKey });
+  });
+
+  describe("certifications", () => {
+    const savedCertification = {
+      id: "cert-1",
+      name: "NR-35",
+      issuer: "SENAI",
+      issued_date: "2020-03-01",
+      expiration_date: null,
+      document: null,
+    };
+    const document = {
+      filename: "nr35.pdf",
+      content_type: "application/pdf",
+      size_bytes: 2048,
+      uploaded_at: "2026-10-13T12:00:00Z",
+    };
+    const pdf = () =>
+      new File(["%PDF-1.7"], "nr35.pdf", { type: "application/pdf" });
+
+    async function fillNewCertification(
+      user: ReturnType<typeof userEvent.setup>,
+    ) {
+      await user.click(
+        screen.getByRole("button", { name: /adicionar certificação/i }),
+      );
+      await user.type(screen.getByLabelText(/nome da certificação/i), "NR-35");
+      await user.type(screen.getByLabelText(/instituição emissora/i), "SENAI");
+      fireEvent.change(screen.getByLabelText(/data de emissão/i), {
+        target: { value: "2020-03-01" },
+      });
+    }
+
+    it("creates a certification and uploads its document", async () => {
+      const user = userEvent.setup();
+      const post = vi
+        .spyOn(apiClient, "post")
+        .mockResolvedValueOnce({ data: savedCertification });
+      const put = vi
+        .spyOn(apiClient, "put")
+        .mockResolvedValueOnce({ data: { ...savedCertification, document } });
+      render(
+        <EditProfileModal open onOpenChange={vi.fn()} profile={baseProfile} />,
+      );
+
+      await fillNewCertification(user);
+      await user.upload(screen.getByLabelText(/^comprovante$/i), pdf());
+      await user.click(screen.getByRole("button", { name: /concluir/i }));
+
+      expect(
+        await screen.findByText("Comprovante: nr35.pdf (2 KB)"),
+      ).toBeVisible();
+      expect(post).toHaveBeenCalledWith("/professionals/me/certifications", {
+        name: "NR-35",
+        issuer: "SENAI",
+        issued_date: "2020-03-01",
+        expiration_date: null,
+      });
+      expect(put.mock.calls[0]![0]).toBe(
+        "/professionals/me/certifications/cert-1/document",
+      );
+    });
+
+    it("rejects an unsupported file before calling the API", async () => {
+      const user = userEvent.setup();
+      const post = vi.spyOn(apiClient, "post");
+      render(
+        <EditProfileModal open onOpenChange={vi.fn()} profile={baseProfile} />,
+      );
+
+      await fillNewCertification(user);
+      fireEvent.change(screen.getByLabelText(/^comprovante$/i), {
+        target: {
+          files: [
+            new File(["x"], "carta.docx", { type: "application/msword" }),
+          ],
+        },
+      });
+      await user.click(screen.getByRole("button", { name: /concluir/i }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Envie um arquivo PDF, PNG ou JPG.",
+      );
+      expect(post).not.toHaveBeenCalled();
+    });
+
+    it("keeps a saved certification when the upload fails and retries without duplicating it", async () => {
+      const user = userEvent.setup();
+      const post = vi
+        .spyOn(apiClient, "post")
+        .mockResolvedValueOnce({ data: savedCertification });
+      const patch = vi
+        .spyOn(apiClient, "patch")
+        .mockResolvedValueOnce({ data: savedCertification });
+      vi.spyOn(apiClient, "put")
+        .mockRejectedValueOnce(
+          new ApiError({
+            message: "unavailable",
+            status: 503,
+            code: "document_storage_unavailable",
+          }),
+        )
+        .mockResolvedValueOnce({ data: { ...savedCertification, document } });
+      render(
+        <EditProfileModal open onOpenChange={vi.fn()} profile={baseProfile} />,
+      );
+
+      await fillNewCertification(user);
+      await user.upload(screen.getByLabelText(/^comprovante$/i), pdf());
+      await user.click(screen.getByRole("button", { name: /concluir/i }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "O envio de arquivos está indisponível agora.",
+      );
+
+      await user.click(screen.getByRole("button", { name: /concluir/i }));
+
+      expect(
+        await screen.findByText("Comprovante: nr35.pdf (2 KB)"),
+      ).toBeVisible();
+      expect(post).toHaveBeenCalledOnce();
+      expect(patch).toHaveBeenCalledWith(
+        "/professionals/me/certifications/cert-1",
+        expect.objectContaining({ name: "NR-35" }),
+      );
+    });
+
+    it("blocks an expiration before the issue date", async () => {
+      const user = userEvent.setup();
+      const post = vi.spyOn(apiClient, "post");
+      render(
+        <EditProfileModal open onOpenChange={vi.fn()} profile={baseProfile} />,
+      );
+
+      await fillNewCertification(user);
+      fireEvent.change(screen.getByLabelText(/validade/i), {
+        target: { value: "2019-01-01" },
+      });
+      await user.click(screen.getByRole("button", { name: /concluir/i }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "A validade não pode ser anterior à data de emissão.",
+      );
+      expect(post).not.toHaveBeenCalled();
+    });
+
+    it("removes the document of an existing certification", async () => {
+      const user = userEvent.setup();
+      const remove = vi.spyOn(apiClient, "delete").mockResolvedValueOnce({});
+      render(
+        <EditProfileModal
+          open
+          onOpenChange={vi.fn()}
+          profile={{
+            ...baseProfile,
+            certifications: [{ ...savedCertification, document }],
+          }}
+        />,
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: "Editar certificação NR-35" }),
+      );
+      expect(screen.getByText("Arquivo atual: nr35.pdf")).toBeVisible();
+      await user.click(
+        screen.getByRole("button", { name: /remover comprovante/i }),
+      );
+      await user.click(
+        screen.getAllByRole("button", { name: /^cancelar$/i })[0]!,
+      );
+
+      expect(await screen.findByText("Sem comprovante")).toBeVisible();
+      expect(remove).toHaveBeenCalledWith(
+        "/professionals/me/certifications/cert-1/document",
+      );
+    });
+
+    it("downloads the document through a short-lived link", async () => {
+      const user = userEvent.setup();
+      vi.spyOn(apiClient, "get").mockResolvedValueOnce({
+        data: {
+          url: "https://storage.example.invalid/cert-1?sig=1",
+          expires_at: "2026-10-13T12:05:00Z",
+        },
+      });
+      render(
+        <EditProfileModal
+          open
+          onOpenChange={vi.fn()}
+          profile={{
+            ...baseProfile,
+            certifications: [{ ...savedCertification, document }],
+          }}
+        />,
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: "Baixar comprovante de NR-35" }),
+      );
+
+      await waitFor(() =>
+        expect(startDownload).toHaveBeenCalledWith(
+          "https://storage.example.invalid/cert-1?sig=1",
+        ),
+      );
+    });
+
+    it("removes a certification and shows the empty state", async () => {
+      const user = userEvent.setup();
+      const remove = vi.spyOn(apiClient, "delete").mockResolvedValueOnce({});
+      render(
+        <EditProfileModal
+          open
+          onOpenChange={vi.fn()}
+          profile={{ ...baseProfile, certifications: [savedCertification] }}
+        />,
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: "Remover certificação NR-35" }),
+      );
+
+      expect(
+        await screen.findByText("Nenhuma certificação cadastrada ainda."),
+      ).toBeVisible();
+      expect(remove).toHaveBeenCalledWith(
+        "/professionals/me/certifications/cert-1",
+      );
+    });
+
+    it("shows why a removal failed", async () => {
+      const user = userEvent.setup();
+      vi.spyOn(apiClient, "delete").mockRejectedValueOnce(
+        new ApiError({
+          message: "gone",
+          status: 404,
+          code: "certification_not_found",
+        }),
+      );
+      render(
+        <EditProfileModal
+          open
+          onOpenChange={vi.fn()}
+          profile={{ ...baseProfile, certifications: [savedCertification] }}
+        />,
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: "Remover certificação NR-35" }),
+      );
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Esta certificação não existe mais.",
+      );
+    });
   });
 });

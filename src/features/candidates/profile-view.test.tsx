@@ -11,11 +11,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "@/lib/api-client";
 import { ApiError } from "@/lib/api-error";
 
+import { startDownload } from "./certification-download";
 import { ProfileView } from "./profile-view";
 
 vi.mock("@/lib/api-client", () => ({
   apiClient: { get: vi.fn(), patch: vi.fn() },
 }));
+vi.mock("./certification-download", () => ({ startDownload: vi.fn() }));
 
 const validProfile = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -45,6 +47,29 @@ const validProfile = {
       field: "Gestão Empresarial",
       start_date: "2010-01-01",
       end_date: "2011-12-01",
+    },
+  ],
+  certifications: [
+    {
+      id: "c1",
+      name: "NR-35",
+      issuer: "SENAI",
+      issued_date: "2020-03-01",
+      expiration_date: "2022-03-01",
+      document: {
+        filename: "nr35.pdf",
+        content_type: "application/pdf",
+        size_bytes: 2048,
+        uploaded_at: "2026-10-13T12:00:00Z",
+      },
+    },
+    {
+      id: "c2",
+      name: "Excel Avançado",
+      issuer: null,
+      issued_date: "2018-05-01",
+      expiration_date: null,
+      document: null,
     },
   ],
   skills: [
@@ -84,7 +109,13 @@ describe("ProfileView", () => {
 
   it("shows empty states for sections with no data", async () => {
     vi.spyOn(apiClient, "get").mockResolvedValueOnce({
-      data: { ...validProfile, experiences: [], education: [], skills: [] },
+      data: {
+        ...validProfile,
+        experiences: [],
+        education: [],
+        certifications: [],
+        skills: [],
+      },
     });
 
     render(<ProfileView />);
@@ -95,6 +126,9 @@ describe("ProfileView", () => {
     ).toBeVisible();
     expect(
       screen.getByText("Nenhuma formação cadastrada ainda."),
+    ).toBeVisible();
+    expect(
+      screen.getByText("Nenhuma certificação cadastrada ainda."),
     ).toBeVisible();
     expect(
       screen.getByText("Nenhuma habilidade cadastrada ainda."),
@@ -183,5 +217,59 @@ describe("ProfileView", () => {
     expect(
       screen.queryByRole("button", { name: /tentar novamente/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("lists certifications and downloads a document", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(apiClient, "get")
+      .mockResolvedValueOnce({ data: validProfile })
+      .mockResolvedValueOnce({
+        data: {
+          url: "https://storage.example.invalid/c1?sig=1",
+          expires_at: "2026-10-13T12:05:00Z",
+        },
+      });
+
+    render(<ProfileView />);
+
+    expect(await screen.findByText("SENAI · 2020 – 2022")).toBeVisible();
+    expect(screen.getByText("Emitida em 2018")).toBeVisible();
+    expect(
+      screen.queryByRole("button", {
+        name: "Baixar comprovante de Excel Avançado",
+      }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Baixar comprovante de NR-35" }),
+    );
+
+    expect(startDownload).toHaveBeenCalledWith(
+      "https://storage.example.invalid/c1?sig=1",
+    );
+  });
+
+  it("explains a failed download", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(apiClient, "get")
+      .mockResolvedValueOnce({ data: validProfile })
+      .mockRejectedValueOnce(
+        new ApiError({
+          message: "unavailable",
+          status: 503,
+          code: "document_storage_unavailable",
+        }),
+      );
+
+    render(<ProfileView />);
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Baixar comprovante de NR-35",
+      }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "O envio de arquivos está indisponível agora.",
+    );
   });
 });
