@@ -34,7 +34,7 @@ describe("role based route protection", () => {
     signIn("administrator");
 
     cy.location("pathname").should("eq", "/administrador");
-    cy.contains("h1", "Área do administrador").should("be.visible");
+    cy.contains("h1", "Relatórios da plataforma").should("be.visible");
   });
 
   it("refuses a typed URL when there is no session", () => {

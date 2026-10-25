@@ -138,7 +138,11 @@ describe("Sidebar", () => {
       "href",
       "/administrador/contas",
     );
-    ["Relatórios", "Empresas", "Capacitação"].forEach((label) => {
+    expect(screen.getByRole("link", { name: "Relatórios" })).toHaveAttribute(
+      "href",
+      "/administrador",
+    );
+    ["Empresas", "Capacitação"].forEach((label) => {
       expect(screen.getByText(label)).toBeVisible();
       expect(
         screen.queryByRole("link", { name: label }),
