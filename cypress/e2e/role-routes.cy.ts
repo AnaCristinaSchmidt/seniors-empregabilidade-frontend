@@ -45,19 +45,24 @@ describe("role based route protection", () => {
   });
 
   it("refuses a typed URL that belongs to another role", () => {
-    signIn("candidate");
-    cy.location("pathname").should("eq", "/candidato");
-
-    cy.visit("/administrador");
+    stubSignIn("candidate");
+    cy.visit("/administrador", {
+      onBeforeLoad(window) {
+        window.sessionStorage.setItem(
+          "seniors.access-token",
+          "e2e-access-token",
+        );
+      },
+    });
+    cy.wait("@currentUser")
+      .its("request.headers.authorization")
+      .should("eq", "Bearer e2e-access-token");
 
     cy.location("pathname").should("eq", "/candidato");
     cy.contains("h1", "Área do candidato").should("be.visible");
   });
 
   it("sends an expired session back to the login screen", () => {
-    signIn("candidate");
-    cy.location("pathname").should("eq", "/candidato");
-
     cy.intercept("GET", "**/auth/me", {
       statusCode: 401,
       body: {
@@ -68,8 +73,22 @@ describe("role based route protection", () => {
       },
     }).as("expired");
 
-    cy.visit("/empresa");
+    cy.visit("/empresa", {
+      onBeforeLoad(window) {
+        window.sessionStorage.setItem(
+          "seniors.access-token",
+          "e2e-access-token",
+        );
+      },
+    });
+    cy.wait("@expired")
+      .its("request.headers.authorization")
+      .should("eq", "Bearer e2e-access-token");
 
     cy.location("pathname").should("eq", "/login");
+    cy.window()
+      .its("sessionStorage")
+      .invoke("getItem", "seniors.access-token")
+      .should("be.null");
   });
 });

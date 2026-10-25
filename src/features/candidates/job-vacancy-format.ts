@@ -1,6 +1,6 @@
-import type { JobVacancy, JobVacancyWorkMode } from "./job-vacancy-schema";
+import type { JobDetail } from "./job-detail-schema";
 
-const workModeLabels: Record<JobVacancyWorkMode, string> = {
+const workModeLabels: Record<JobDetail["work_mode"], string> = {
   onsite: "Presencial",
   remote: "Remoto",
   hybrid: "Híbrido",
@@ -16,18 +16,8 @@ export function companyInitials(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
-export function formatWorkMode(workMode: JobVacancyWorkMode): string {
+export function formatWorkMode(workMode: JobDetail["work_mode"]): string {
   return workModeLabels[workMode];
-}
-
-export function formatLocation(
-  city: string | null,
-  state: string | null,
-): string | null {
-  if (city && state) return `${city}, ${state}`;
-  if (city) return city;
-  if (state) return state;
-  return null;
 }
 
 export function formatSalaryRange(
@@ -82,12 +72,18 @@ export function formatPublishedLabel(
   return `publicada há ${days} dias`;
 }
 
-export function formatVacancyMeta(vacancy: JobVacancy, now?: Date): string {
+export function formatVacancyMeta(
+  vacancy: JobDetail,
+  salaryMax?: number | null,
+  now?: Date,
+): string {
   return [
-    formatLocation(vacancy.city, vacancy.state),
+    vacancy.location,
     formatWorkMode(vacancy.work_mode),
-    formatSalaryRange(vacancy.salary_min, vacancy.salary_max),
-    formatPublishedLabel(vacancy.published_at, now),
+    formatSalaryRange(null, salaryMax ?? null),
+    vacancy.published_at
+      ? formatPublishedLabel(vacancy.published_at, now)
+      : null,
   ]
     .filter(Boolean)
     .join(" · ");

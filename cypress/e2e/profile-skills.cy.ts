@@ -71,20 +71,9 @@ describe("résumé skill selection", () => {
       skills,
     });
 
-    cy.intercept("POST", "**/auth/login", {
-      body: {
-        access_token: "synthetic-access",
-        id_token: "synthetic-id",
-        refresh_token: null,
-        expires_in: 900,
-        token_type: "Bearer",
-        user_id: candidateId,
-        user_type: "candidate",
-      },
-    });
     cy.intercept("GET", "**/auth/me", {
       body: { id: candidateId, user_type: "candidate", company_status: null },
-    });
+    }).as("currentUser");
     cy.intercept("GET", "**/professionals/me", (req) => {
       req.reply(profile());
     }).as("profile");
@@ -103,10 +92,17 @@ describe("résumé skill selection", () => {
       req.reply({ ...profile(), ...(req.body as object) });
     }).as("save");
 
-    cy.visit("/login");
-    cy.get("#email").type("candidate@example.invalid");
-    cy.get("#password").type("SyntheticTest123!");
-    cy.contains("button", "Entrar").click();
+    cy.visit("/candidato", {
+      onBeforeLoad(window) {
+        window.sessionStorage.setItem(
+          "seniors.access-token",
+          "synthetic-access",
+        );
+      },
+    });
+    cy.wait("@currentUser")
+      .its("request.headers.authorization")
+      .should("eq", "Bearer synthetic-access");
     cy.contains("a", "Meu perfil").click();
     cy.wait("@profile");
     cy.contains("button", "Editar perfil").click();

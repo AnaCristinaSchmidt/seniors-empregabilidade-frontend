@@ -1,198 +1,403 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ComponentProps } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ComponentProps, ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError } from "@/lib/api-error";
+import {
+  stubApiRoutes,
+  type ApiStub,
+  type StubResponse,
+} from "../../../tests/api-stub";
+import { jobDetail } from "../../../tests/job-detail-fixture";
 
-import * as api from "./job-vacancies-api";
+import { jobDetailQueryKey } from "./job-detail";
+import type { JobDetail } from "./job-detail-schema";
 import { JobVacancyDetailModal } from "./job-vacancy-detail-modal";
-import type { JobVacancy } from "./job-vacancy-schema";
 
-vi.mock("./job-vacancies-api", async () => {
-  const actual = await vi.importActual<typeof api>("./job-vacancies-api");
-  return {
-    ...actual,
-    applyToJobVacancy: vi.fn(),
-  };
-});
-
-const vacancy: JobVacancy = {
-  id: "11111111-1111-4111-8111-111111111111",
-  title: "Supervisor de logística",
-  description:
-    "Coordenar equipe de 25 pessoas no centro de distribuição da zona leste.",
-  company_name: "Moveve Distribuição",
-  city: "São Paulo",
-  state: "SP",
-  work_mode: "onsite",
-  salary_min: 6500,
-  salary_max: 8000,
-  published_at: "2026-09-23",
-  status: "open",
-  has_applied: false,
-  skills: [
-    "Gestão de equipe operacional",
-    "Indicadores de produtividade",
-    "Excel avançado",
-    "Certificação NR-11",
-  ],
-};
-
-function mount(
-  props: Partial<ComponentProps<typeof JobVacancyDetailModal>> = {},
-) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <JobVacancyDetailModal
-        vacancy={vacancy}
-        open
-        onOpenChange={vi.fn()}
-        candidateSkillNames={[
-          "Gestão de equipe operacional",
-          "Indicadores de produtividade",
-          "Excel avançado",
-        ]}
-        {...props}
-      />
-    </QueryClientProvider>,
-  );
-}
+let stub: ApiStub;
+let detailResponse: StubResponse;
+let applicationResponse: () => StubResponse | Promise<StubResponse>;
+let detailReply: () => StubResponse | Promise<StubResponse>;
+const applicationPath = `POST /job-postings/${jobDetail.id}/applications`;
 
 beforeEach(() => {
-  vi.resetAllMocks();
-  vi.mocked(api.applyToJobVacancy).mockResolvedValue({
-    id: "22222222-2222-4222-8222-222222222222",
+  detailResponse = { status: 200, data: jobDetail };
+  detailReply = () => detailResponse;
+  applicationResponse = () => {
+    detailResponse = {
+      status: 200,
+      data: { ...jobDetail, already_applied: true, is_applicable: false },
+    };
+    return {
+      status: 201,
+      data: { id: "55555555-5555-4555-8555-555555555555" },
+    };
+  };
+  stub = stubApiRoutes({
+    [`GET /jobs/${jobDetail.id}`]: () => detailReply(),
+    [applicationPath]: () => applicationResponse(),
   });
 });
 
+afterEach(() => stub.restore());
+
+function mount(
+  overrides: Partial<ComponentProps<typeof JobVacancyDetailModal>> = {},
+) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const onOpenChange = vi.fn();
+  const props = { jobId: jobDetail.id, open: true, onOpenChange, ...overrides };
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  const view = render(<JobVacancyDetailModal {...props} />, { wrapper });
+  return {
+    client,
+    onOpenChange,
+    ...view,
+    update: (changes: Partial<typeof props>) =>
+      view.rerender(<JobVacancyDetailModal {...props} {...changes} />),
+  };
+}
+
+async function loaded() {
+  return screen.findByRole("heading", { name: jobDetail.title });
+}
+
+function problem(status: number, code: string): StubResponse {
+  return {
+    status,
+    data: {
+      title: "Request failed",
+      status,
+      code,
+      detail: "Internal details must not be displayed",
+    },
+  };
+}
+
 describe("JobVacancyDetailModal", () => {
-  it("shows company, location, work mode, salary, description and requirements", async () => {
-    mount();
-
-    expect(
-      await screen.findByRole("heading", { name: "Supervisor de logística" }),
-    ).toBeVisible();
-    expect(screen.getByText("Moveve Distribuição")).toBeVisible();
-    expect(screen.getByText(/São Paulo, SP/)).toBeVisible();
-    expect(screen.getByText(/Presencial/)).toBeVisible();
-    expect(screen.getByText(/R\$ 6\.500 a R\$ 8\.000/)).toBeVisible();
-    expect(screen.getByText(/Coordenar equipe de 25 pessoas/)).toBeVisible();
-    expect(screen.getByText("Você atende 3 de 4 requisitos")).toBeVisible();
-    expect(screen.getByText("Certificação NR-11")).toBeVisible();
-    expect(screen.getByText("Habilidade em falta:")).toBeVisible();
-  });
-
-  it("sends the application and keeps the new state on the same screen", async () => {
-    mount();
-
-    await userEvent.click(
-      screen.getByRole("button", { name: "Candidatar-se" }),
+  it("shows authoritative details and every skill separately from compatibility", async () => {
+    mount({
+      salaryMax: 8000,
+      matchSummary: {
+        matchedCount: 1,
+        requiredCount: 2,
+        missingNames: ["Teamwork"],
+      },
+    });
+    await loaded();
+    expect(screen.getByText(jobDetail.company_name)).toBeVisible();
+    expect(screen.getByText(jobDetail.description)).toBeVisible();
+    expect(screen.getByText(/Example City.*Híbrido.*até R\$/)).toBeVisible();
+    const skills = screen.getByRole("heading", {
+      name: "Requisitos e competências",
+    }).parentElement!;
+    expect(within(skills).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(skills).getByText("Spreadsheets")).toBeVisible();
+    expect(within(skills).getByText("Teamwork")).toBeVisible();
+    expect(screen.getByText("Você atende 1 de 2 requisitos")).toBeVisible();
+    expect(screen.getByText("31/12/2026")).toHaveAttribute(
+      "datetime",
+      "2026-12-31",
     );
-
-    expect(await screen.findByText("Candidatura enviada")).toBeVisible();
-    expect(screen.getByText("Sucesso")).toBeVisible();
-    expect(
-      screen.getByRole("button", { name: "Já candidatado" }),
-    ).toBeDisabled();
-    expect(api.applyToJobVacancy).toHaveBeenCalledWith(vacancy.id);
-    expect(
-      screen.getByRole("heading", { name: "Supervisor de logística" }),
-    ).toBeVisible();
-  });
-
-  it("shows a loading label on the apply button while the request is in flight", async () => {
-    let complete!: (value: api.JobApplication) => void;
-    vi.mocked(api.applyToJobVacancy).mockReturnValue(
-      new Promise((resolve) => {
-        complete = resolve;
-      }),
-    );
-
-    mount();
-    await userEvent.click(
-      screen.getByRole("button", { name: "Candidatar-se" }),
-    );
-
-    expect(
-      screen.getByRole("button", { name: "Enviando candidatura…" }),
-    ).toBeDisabled();
-
-    complete({ id: "22222222-2222-4222-8222-222222222222" });
-    expect(await screen.findByText("Candidatura enviada")).toBeVisible();
-  });
-
-  it("shows an error and keeps the apply button when the request fails", async () => {
-    vi.mocked(api.applyToJobVacancy).mockRejectedValue(
-      new ApiError({
-        message: "Application already exists",
-        code: "already_applied",
-      }),
-    );
-
-    mount();
-    await userEvent.click(
-      screen.getByRole("button", { name: "Candidatar-se" }),
-    );
-
-    expect(
-      await screen.findByText("Você já se candidatou a esta vaga."),
-    ).toBeVisible();
-    expect(screen.getByText("Erro")).toBeVisible();
     expect(screen.getByRole("button", { name: "Candidatar-se" })).toBeEnabled();
   });
 
-  it("disables apply when the professional already applied", () => {
-    mount({
-      vacancy: { ...vacancy, has_applied: true },
-    });
+  it.each([
+    [{ already_applied: true }, "Já candidatado"],
+    [{ status: "closed", is_open: false }, "Vaga encerrada"],
+    [{ status: "paused", is_open: false }, "Vaga pausada"],
+    [{ status: "expired", is_open: false, is_expired: true }, "Vaga expirada"],
+    [
+      { status: "published", is_open: false, is_expired: true },
+      "Vaga expirada",
+    ],
+    [{}, "Candidatura indisponível"],
+  ] as const)(
+    "disables applying for server state %j",
+    async (overrides, label) => {
+      detailResponse = {
+        status: 200,
+        data: { ...jobDetail, ...overrides, is_applicable: false },
+      };
+      mount();
+      await loaded();
+      expect(screen.getByRole("button", { name: label })).toBeDisabled();
+      expect(screen.getByRole("status")).toHaveTextContent(label);
+      expect(stub.requests.every((request) => request.method === "get")).toBe(
+        true,
+      );
+    },
+  );
 
+  it("announces loading and disables applying before the detail arrives", async () => {
+    let resolve!: (response: StubResponse) => void;
+    detailReply = () =>
+      new Promise((complete) => {
+        resolve = complete;
+      });
+    mount();
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Carregando detalhes da vaga",
+    );
+    expect(
+      screen.getByRole("button", { name: "Candidatar-se" }),
+    ).toBeDisabled();
+    resolve(detailResponse);
+    await loaded();
+    expect(screen.getByRole("button", { name: "Candidatar-se" })).toBeEnabled();
+  });
+
+  it("shows a safe error and can retry a failed detail request", async () => {
+    detailResponse = problem(500, "internal_error");
+    mount();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Não foi possível carregar os detalhes da vaga",
+    );
+    expect(screen.queryByText(/Internal details/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Candidatar-se" }),
+    ).toBeDisabled();
+    detailResponse = { status: 200, data: jobDetail };
+    await userEvent.click(
+      screen.getByRole("button", { name: "Tentar novamente" }),
+    );
+    await loaded();
+    expect(screen.getByRole("button", { name: "Candidatar-se" })).toBeEnabled();
+  });
+
+  it("explains unavailable jobs without offering an application or retry", async () => {
+    detailResponse = problem(404, "job_not_found");
+    mount();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Esta vaga não está disponível.",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Tentar novamente" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Candidatar-se" }),
+    ).toBeDisabled();
+  });
+
+  it("does not enable applying when detail validation fails", async () => {
+    detailResponse = {
+      status: 200,
+      data: { ...jobDetail, is_applicable: undefined },
+    };
+    mount();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Não foi possível carregar",
+    );
+    expect(
+      screen.getByRole("button", { name: "Candidatar-se" }),
+    ).toBeDisabled();
+  });
+
+  it("keeps success in the detail cache and invalidates application data", async () => {
+    const { client, update } = mount();
+    client.setQueryData(["applications", ""], []);
+    await loaded();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Candidatar-se" }),
+    );
+    expect(await screen.findByText("Candidatura enviada")).toBeVisible();
     expect(
       screen.getByRole("button", { name: "Já candidatado" }),
     ).toBeDisabled();
-    expect(
-      screen.queryByRole("button", { name: "Candidatar-se" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("disables apply when the vacancy is closed", () => {
-    mount({
-      vacancy: { ...vacancy, status: "closed" },
+    expect(client.getQueryData(jobDetailQueryKey(jobDetail.id))).toMatchObject({
+      already_applied: true,
+      is_applicable: false,
     });
-
+    expect(client.getQueryState(["applications", ""])?.isInvalidated).toBe(
+      true,
+    );
+    update({ open: false });
+    update({ open: true });
+    await loaded();
+    await waitFor(() =>
+      expect(
+        stub.requests.filter((request) => request.method === "get"),
+      ).toHaveLength(2),
+    );
     expect(
-      screen.getByRole("button", { name: "Vaga encerrada" }),
+      screen.getByRole("button", { name: "Já candidatado" }),
     ).toBeDisabled();
-    expect(
-      screen.queryByRole("button", { name: "Candidatar-se" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Candidatura enviada")).not.toBeInTheDocument();
   });
 
-  it("explains when the vacancy lists no skill requirements", () => {
-    mount({
-      vacancy: { ...vacancy, skills: [] },
+  it("prevents repeated submission while applying", async () => {
+    let resolve!: (response: StubResponse) => void;
+    applicationResponse = () =>
+      new Promise((complete) => {
+        resolve = complete;
+      });
+    mount();
+    await loaded();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Candidatar-se" }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Enviando candidatura…" }),
+    ).toBeDisabled();
+    resolve({
+      status: 201,
+      data: { id: "55555555-5555-4555-8555-555555555555" },
     });
+    expect(await screen.findByText("Candidatura enviada")).toBeVisible();
+    expect(
+      stub.requests.filter((request) => request.method === "post"),
+    ).toHaveLength(1);
+  });
 
+  it("shows a safe application failure and allows another attempt", async () => {
+    applicationResponse = () => problem(500, "internal_error");
+    mount();
+    await loaded();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Candidatar-se" }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Não foi possível enviar a candidatura",
+    );
+    expect(screen.queryByText(/Internal details/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Candidatar-se" })).toBeEnabled();
+  });
+
+  it.each([
+    ["already_applied", { already_applied: true }, "Já candidatado"],
+    ["job_closed", { status: "closed", is_open: false }, "Vaga encerrada"],
+  ] as const)(
+    "refreshes details after %s instead of keeping an actionable stale button",
+    async (code, overrides, label) => {
+      applicationResponse = () => {
+        detailResponse = {
+          status: 200,
+          data: { ...jobDetail, ...overrides, is_applicable: false },
+        };
+        return problem(409, code);
+      };
+      mount();
+      await loaded();
+      await userEvent.click(
+        screen.getByRole("button", { name: "Candidatar-se" }),
+      );
+      expect(await screen.findByRole("button", { name: label })).toBeDisabled();
+      expect(await screen.findByRole("alert")).toBeVisible();
+    },
+  );
+
+  it("announces a job removed during submission without a dangling error description", async () => {
+    applicationResponse = () => {
+      detailResponse = problem(404, "job_not_found");
+      return problem(404, "job_not_found");
+    };
+    mount();
+    await loaded();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Candidatar-se" }),
+    );
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Esta vaga não está disponível.");
+    const button = screen.getByRole("button", { name: "Candidatar-se" });
+    await waitFor(() =>
+      expect(button).toHaveAttribute("aria-describedby", alert.id),
+    );
+    expect(button).toBeDisabled();
+  });
+
+  it("handles missing optional metadata and an empty description and skills", async () => {
+    detailResponse = {
+      status: 200,
+      data: {
+        ...jobDetail,
+        location: null,
+        published_at: null,
+        skills: [],
+        description: " ",
+      },
+    };
+    mount();
+    await loaded();
+    expect(screen.getByText("Descrição não informada.")).toBeVisible();
     expect(
       screen.getByText("Esta vaga ainda não listou requisitos de habilidades."),
     ).toBeVisible();
+    expect(screen.queryByText("Como você se encaixa")).not.toBeInTheDocument();
   });
 
-  it("closes from the footer without sending an application", async () => {
-    const onOpenChange = vi.fn();
-    mount({ onOpenChange });
-
-    const [footerClose] = screen.getAllByRole("button", { name: "Fechar" });
-    await userEvent.click(footerClose!);
-
+  it("keeps applying disabled while refreshing existing data", async () => {
+    const { client } = mount();
+    await loaded();
+    let resolve!: (response: StubResponse) => void;
+    detailReply = () =>
+      new Promise((complete) => {
+        resolve = complete;
+      });
+    act(() => {
+      void client.invalidateQueries({
+        queryKey: jobDetailQueryKey(jobDetail.id),
+      });
+    });
+    await screen.findByText("Atualizando detalhes da vaga…");
+    expect(
+      screen.getByRole("button", { name: "Candidatar-se" }),
+    ).toBeDisabled();
+    resolve(detailResponse);
     await waitFor(() =>
-      expect(onOpenChange).toHaveBeenCalledWith(false, expect.anything()),
+      expect(
+        screen.getByRole("button", { name: "Candidatar-se" }),
+      ).toBeEnabled(),
     );
-    expect(api.applyToJobVacancy).not.toHaveBeenCalled();
+  });
+
+  it("does not carry a late application result into another vacancy", async () => {
+    let resolve!: (response: StubResponse) => void;
+    applicationResponse = () =>
+      new Promise((complete) => {
+        resolve = complete;
+      });
+    const { update } = mount();
+    await loaded();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Candidatar-se" }),
+    );
+    const otherJob: JobDetail = {
+      ...jobDetail,
+      id: "66666666-6666-4666-8666-666666666666",
+      title: "Other vacancy",
+    };
+    stub.restore();
+    stub = stubApiRoutes({
+      [`GET /jobs/${otherJob.id}`]: { status: 200, data: otherJob },
+    });
+    update({ jobId: otherJob.id });
+    await screen.findByRole("heading", { name: otherJob.title });
+    await act(async () => {
+      resolve({
+        status: 201,
+        data: { id: "55555555-5555-4555-8555-555555555555" },
+      });
+      await Promise.resolve();
+    });
+    expect(screen.queryByText("Candidatura enviada")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Candidatar-se" })).toBeEnabled();
+  });
+
+  it("closes with Escape without submitting", async () => {
+    const { onOpenChange } = mount();
+    await loaded();
+    await userEvent.keyboard("{Escape}");
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.anything());
+    expect(stub.requests).toHaveLength(1);
+  });
+
+  it("does not fetch while the modal is closed", () => {
+    mount({ open: false });
+    expect(stub.requests).toHaveLength(0);
   });
 });

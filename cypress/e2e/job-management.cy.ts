@@ -17,14 +17,12 @@ const WCAG = {
 
 const accounts = {
   company: {
-    email: "empresa@exemplo.com",
     token: "e2e-company-token",
     id: COMPANY_ID,
     user_type: "company",
     company_status: "approved",
   },
   candidate: {
-    email: "candidato@exemplo.com",
     token: "e2e-candidate-token",
     id: CANDIDATE_ID,
     user_type: "candidate",
@@ -66,23 +64,6 @@ function fakeApi(): void {
   };
   let createdSkills = 0;
 
-  cy.intercept("POST", "**/auth/login", (request) => {
-    const { email } = request.body as { email: string };
-    const account =
-      email === accounts.company.email ? accounts.company : accounts.candidate;
-    request.reply({
-      statusCode: 200,
-      body: {
-        access_token: account.token,
-        id_token: "e2e-id-token",
-        refresh_token: null,
-        expires_in: 900,
-        token_type: "Bearer",
-        user_id: account.id,
-        user_type: account.user_type,
-      },
-    });
-  }).as("login");
   cy.intercept("GET", "**/auth/me", (request) => {
     const account =
       request.headers.authorization === `Bearer ${accounts.company.token}`
@@ -96,7 +77,7 @@ function fakeApi(): void {
         company_status: account.company_status,
       },
     });
-  });
+  }).as("currentUser");
   cy.intercept(
     { method: "GET", pathname: "/api/v1/skills" },
     { statusCode: 200, body: [] },
@@ -169,12 +150,22 @@ function fakeApi(): void {
   }).as("searchJobs");
 }
 
-function signIn(role: Role): void {
-  cy.visit("/login");
-  cy.get("#email").type(accounts[role].email);
-  cy.get("#password").type("senha-sintetica");
-  cy.contains("button", "Entrar").click();
-  cy.wait("@login");
+function visitRoleArea(role: Role): void {
+  cy.visit(role === "company" ? "/empresa" : "/candidato", {
+    onBeforeLoad(window) {
+      window.sessionStorage.setItem(
+        "seniors.access-token",
+        accounts[role].token,
+      );
+    },
+  });
+  cy.wait("@currentUser")
+    .its("request.headers.authorization")
+    .should("eq", `Bearer ${accounts[role].token}`);
+  cy.contains(
+    "h1",
+    role === "company" ? "Área da empresa" : "Área do candidato",
+  ).should("be.visible");
 }
 
 function signOut(): void {
@@ -205,7 +196,7 @@ function field(label: string): Cypress.Chainable<JQuery<HTMLElement>> {
 describe("job management", () => {
   it("blocks saving a job without title or skill, then shows the edit in Minhas vagas", () => {
     fakeApi();
-    signIn("company");
+    visitRoleArea("company");
     openMyJobs();
     cy.injectAxe();
 
@@ -254,7 +245,7 @@ describe("job management", () => {
 
   it("takes a closed job out of the candidate search and brings it back when reopened", () => {
     fakeApi();
-    signIn("company");
+    visitRoleArea("company");
     openMyJobs();
     cy.contains("article", TITLE).within(() => {
       cy.contains("button", "Encerrar").click();
@@ -271,13 +262,13 @@ describe("job management", () => {
     });
 
     signOut();
-    signIn("candidate");
+    visitRoleArea("candidate");
     searchAsCandidate();
     cy.contains("Nenhuma vaga encontrada").should("be.visible");
     cy.contains("h2", TITLE).should("not.exist");
 
     signOut();
-    signIn("company");
+    visitRoleArea("company");
     openMyJobs();
     cy.contains("article", TITLE).within(() => {
       cy.contains("button", "Reabrir").click();
@@ -290,7 +281,7 @@ describe("job management", () => {
     ).should("be.visible");
 
     signOut();
-    signIn("candidate");
+    visitRoleArea("candidate");
     searchAsCandidate();
     cy.contains("1 vaga encontrada").should("be.visible");
     cy.contains("h2", TITLE).should("be.visible");

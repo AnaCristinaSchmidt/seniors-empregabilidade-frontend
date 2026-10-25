@@ -28,33 +28,25 @@ const published = {
   created_at: "2026-09-23T12:00:00Z",
 };
 
-function signInAsApprovedCompany(): void {
-  cy.intercept("POST", "**/auth/login", {
-    statusCode: 200,
-    body: {
-      access_token: "e2e-access-token",
-      id_token: "e2e-id-token",
-      refresh_token: null,
-      expires_in: 900,
-      token_type: "Bearer",
-      user_id: COMPANY_ID,
-      user_type: "company",
-    },
-  }).as("login");
+function visitApprovedCompanyArea(): void {
   cy.intercept("GET", "**/auth/me", {
     statusCode: 200,
     body: { id: COMPANY_ID, user_type: "company", company_status: "approved" },
-  });
+  }).as("currentUser");
   cy.intercept(
     { method: "GET", pathname: "/api/v1/skills" },
     { statusCode: 200, body: [catalogSkill] },
   ).as("skills");
 
-  cy.visit("/login");
-  cy.get("#email").type("empresa@exemplo.com");
-  cy.get("#password").type("senha-sintetica");
-  cy.contains("button", "Entrar").click();
-  cy.wait("@login");
+  cy.visit("/empresa", {
+    onBeforeLoad(window) {
+      window.sessionStorage.setItem("seniors.access-token", "e2e-access-token");
+    },
+  });
+  cy.wait("@currentUser")
+    .its("request.headers.authorization")
+    .should("eq", "Bearer e2e-access-token");
+  cy.contains("h1", "Área da empresa").should("be.visible");
 }
 
 function openMyJobs(): void {
@@ -93,7 +85,7 @@ describe("job posting", () => {
       request.reply({ statusCode: 201, body: published });
     }).as("createJob");
 
-    signInAsApprovedCompany();
+    visitApprovedCompanyArea();
     openMyJobs();
     cy.injectAxe();
     cy.checkA11y(undefined, WCAG);
@@ -159,7 +151,7 @@ describe("job posting", () => {
       },
     ).as("createJob");
 
-    signInAsApprovedCompany();
+    visitApprovedCompanyArea();
     openMyJobs();
     cy.contains("button", "Cadastrar nova vaga").click();
     fillTheJob();
@@ -195,7 +187,7 @@ describe("job posting", () => {
       },
     ).as("changeStatus");
 
-    signInAsApprovedCompany();
+    visitApprovedCompanyArea();
     cy.contains("a", "Minhas vagas").click();
     cy.contains("1 vaga aberta para candidatos").should("be.visible");
     cy.contains("article", published.title).within(() => {

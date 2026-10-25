@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { CompanyBadge } from "@/components/ui/company-badge";
@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { jobSearchQueryOptions } from "./job-search";
 import type { JobSearchResult, WorkMode } from "./job-search-schema";
 import { JobVacancyDetailModal } from "./job-vacancy-detail-modal";
-import type { JobVacancy } from "./job-vacancy-schema";
 
 const WORK_MODE_LABELS: Record<WorkMode, string> = {
   onsite: "Presencial",
@@ -35,6 +34,7 @@ function useDebouncedValue(value: string, delayMs: number): string {
 export function JobSearchView() {
   const [term, setTerm] = useState("");
   const [selectedJob, setSelectedJob] = useState<JobSearchResult | null>(null);
+  const detailTriggerRef = useRef<HTMLButtonElement | null>(null);
   const debouncedTerm = useDebouncedValue(term, SEARCH_DEBOUNCE_MS);
 
   const {
@@ -69,14 +69,19 @@ export function JobSearchView() {
         <JobSearchResults
           jobs={jobs}
           term={debouncedTerm}
-          onView={setSelectedJob}
+          onView={(job, trigger) => {
+            detailTriggerRef.current = trigger;
+            setSelectedJob(job);
+          }}
         />
       )}
 
       <JobVacancyDetailModal
-        vacancy={selectedJob ? toJobVacancy(selectedJob) : null}
+        jobId={selectedJob?.id ?? null}
+        returnFocusRef={detailTriggerRef}
         {...(selectedJob
           ? {
+              salaryMax: selectedJob.salary_max,
               matchSummary: {
                 matchedCount: selectedJob.matched_skill_count,
                 requiredCount: selectedJob.required_skill_count,
@@ -95,24 +100,6 @@ export function JobSearchView() {
   );
 }
 
-function toJobVacancy(job: JobSearchResult): JobVacancy {
-  return {
-    id: job.id,
-    title: job.title,
-    description: "",
-    company_name: job.company_name,
-    city: job.location,
-    state: null,
-    work_mode: job.work_mode,
-    salary_min: null,
-    salary_max: job.salary_max,
-    published_at: job.published_at ?? "",
-    status: "open",
-    has_applied: false,
-    skills: job.missing_skills.map((skill) => skill.name),
-  };
-}
-
 function JobSearchResults({
   jobs,
   term,
@@ -120,7 +107,7 @@ function JobSearchResults({
 }: {
   jobs: JobSearchResult[];
   term: string;
-  onView: (job: JobSearchResult) => void;
+  onView: (job: JobSearchResult, trigger: HTMLButtonElement) => void;
 }) {
   return (
     <div>
@@ -151,7 +138,7 @@ function JobCard({
   onView,
 }: {
   job: JobSearchResult;
-  onView: (job: JobSearchResult) => void;
+  onView: (job: JobSearchResult, trigger: HTMLButtonElement) => void;
 }) {
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border bg-background p-6">
@@ -186,7 +173,7 @@ function JobCard({
         type="button"
         className="w-fit"
         aria-label={`Ver vaga ${job.title}`}
-        onClick={() => onView(job)}
+        onClick={(event) => onView(job, event.currentTarget)}
       >
         Ver vaga
       </Button>

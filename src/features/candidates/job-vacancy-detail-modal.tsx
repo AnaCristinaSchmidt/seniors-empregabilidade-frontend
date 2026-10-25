@@ -1,6 +1,6 @@
-import { useMutation } from "@tanstack/react-query";
-import { CircleCheck, CircleMinus, XIcon } from "lucide-react";
-import { useId, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { XIcon } from "lucide-react";
+import { useId, type RefObject } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -12,12 +12,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ApiError } from "@/lib/api-error";
 
+import { jobDetailQueryKey, jobDetailQueryOptions } from "./job-detail";
+import type { JobDetail } from "./job-detail-schema";
 import { applyToJobVacancy } from "./job-vacancies-api";
 import { applyToJobVacancyErrorMessage } from "./job-vacancy-errors";
 import { companyInitials, formatVacancyMeta } from "./job-vacancy-format";
-import { matchJobVacancySkills } from "./job-vacancy-match";
-import type { JobVacancy } from "./job-vacancy-schema";
 
 interface JobVacancyMatchSummary {
   matchedCount: number;
@@ -26,83 +27,30 @@ interface JobVacancyMatchSummary {
 }
 
 interface JobVacancyDetailModalProps {
-  vacancy: JobVacancy | null;
+  jobId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  candidateSkillNames?: string[];
+  returnFocusRef?: RefObject<HTMLElement | null>;
+  salaryMax?: number | null;
   matchSummary?: JobVacancyMatchSummary;
 }
 
 export function JobVacancyDetailModal({
-  vacancy,
+  jobId,
   open,
   onOpenChange,
-  candidateSkillNames = [],
-  matchSummary,
+  returnFocusRef,
+  ...summary
 }: JobVacancyDetailModalProps) {
-  const [applyError, setApplyError] = useState<string | null>(null);
-  const [appliedHere, setAppliedHere] = useState(false);
-  const [trackedOpen, setTrackedOpen] = useState(open);
-  const successId = useId();
-  const errorId = useId();
-
-  if (open !== trackedOpen) {
-    setTrackedOpen(open);
-    if (!open) {
-      setApplyError(null);
-      setAppliedHere(false);
-    }
-  }
-
-  const mutation = useMutation({
-    mutationFn: (jobPostingId: string) => applyToJobVacancy(jobPostingId),
-    retry: false,
-    gcTime: 0,
-  });
-
-  const alreadyApplied = Boolean(vacancy?.has_applied) || appliedHere;
-  const isClosed = vacancy?.status === "closed";
-  const canApply = Boolean(vacancy) && !alreadyApplied && !isClosed;
-  const busy = mutation.isPending;
-
-  async function handleApply() {
-    if (!vacancy || !canApply || busy) return;
-
-    setApplyError(null);
-
-    try {
-      await mutation.mutateAsync(vacancy.id);
-      setAppliedHere(true);
-    } catch (error) {
-      setApplyError(applyToJobVacancyErrorMessage(error));
-    } finally {
-      mutation.reset();
-    }
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="w-[min(100%-2rem,40rem)] max-w-none gap-6 overflow-visible p-6 sm:p-8"
+        finalFocus={returnFocusRef}
+        className="max-h-[calc(100dvh-2rem)] w-[min(100%-2rem,40rem)] max-w-none gap-6 overflow-y-auto p-6 sm:p-8"
       >
-        {vacancy ? (
-          <VacancyDetail
-            vacancy={vacancy}
-            candidateSkillNames={candidateSkillNames}
-            alreadyApplied={alreadyApplied}
-            isClosed={isClosed}
-            canApply={canApply}
-            busy={busy}
-            applySuccess={appliedHere}
-            applyError={applyError}
-            successId={successId}
-            errorId={errorId}
-            {...(matchSummary ? { matchSummary } : {})}
-            onApply={() => {
-              void handleApply();
-            }}
-          />
+        {open && jobId ? (
+          <VacancyDetail key={jobId} jobId={jobId} {...summary} />
         ) : null}
       </DialogContent>
     </Dialog>
@@ -110,82 +58,80 @@ export function JobVacancyDetailModal({
 }
 
 function VacancyDetail({
-  vacancy,
-  candidateSkillNames,
-  alreadyApplied,
-  isClosed,
-  canApply,
-  busy,
-  applySuccess,
-  applyError,
-  successId,
-  errorId,
+  jobId,
+  salaryMax,
   matchSummary,
-  onApply,
 }: {
-  vacancy: JobVacancy;
-  candidateSkillNames: string[];
-  alreadyApplied: boolean;
-  isClosed: boolean;
-  canApply: boolean;
-  busy: boolean;
-  applySuccess: boolean;
-  applyError: string | null;
-  successId: string;
-  errorId: string;
+  jobId: string;
+  salaryMax?: number | null;
   matchSummary?: JobVacancyMatchSummary;
-  onApply: () => void;
 }) {
-  const meta = formatVacancyMeta(vacancy);
-  const computedMatch = matchJobVacancySkills(
-    vacancy.skills,
-    candidateSkillNames,
-  );
-  const match = matchSummary
-    ? {
-        matched: [],
-        missing: matchSummary.missingNames,
-        total: matchSummary.requiredCount,
+  const client = useQueryClient();
+  const detail = useQuery(jobDetailQueryOptions(jobId));
+  const errorId = useId();
+  const mutation = useMutation({
+    mutationFn: () => applyToJobVacancy(jobId),
+    retry: false,
+    gcTime: 0,
+    onSuccess: async () => {
+      await client.cancelQueries({ queryKey: jobDetailQueryKey(jobId) });
+      client.setQueryData(jobDetailQueryKey(jobId), (previous) =>
+        previous
+          ? { ...previous, already_applied: true, is_applicable: false }
+          : previous,
+      );
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["applications"] }),
+        client.invalidateQueries({ queryKey: ["jobs", "search"] }),
+      ]);
+    },
+    onError: async (error) => {
+      if (
+        error instanceof ApiError &&
+        (error.code === "already_applied" ||
+          error.code === "job_closed" ||
+          error.code === "job_not_found")
+      ) {
+        await client.invalidateQueries({ queryKey: jobDetailQueryKey(jobId) });
       }
-    : computedMatch;
-  const matchedCount = matchSummary
-    ? matchSummary.matchedCount
-    : computedMatch.matched.length;
-  const actionLabel = applyButtonLabel({
-    busy,
-    alreadyApplied,
-    isClosed,
+    },
   });
+
+  const vacancy = detail.data;
+  const unavailable =
+    detail.error instanceof ApiError && detail.error.status === 404;
+  const meta =
+    vacancy && !detail.isError
+      ? formatVacancyMeta(vacancy, salaryMax)
+      : "Consulte as informações e o prazo para candidatura.";
 
   return (
     <>
       <DialogHeader>
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
-            <div
-              data-logo="empresa"
-              aria-hidden="true"
-              className="flex size-12 shrink-0 items-center justify-center rounded-md bg-accent text-base font-semibold text-foreground-2"
-            >
-              {companyInitials(vacancy.company_name)}
-            </div>
+            {vacancy && !detail.isError ? (
+              <div
+                aria-hidden="true"
+                className="flex size-12 shrink-0 items-center justify-center rounded-md bg-accent text-base font-semibold text-foreground-2"
+              >
+                {companyInitials(vacancy.company_name)}
+              </div>
+            ) : null}
             <div className="min-w-0">
               <DialogTitle className="text-xl font-bold">
-                {vacancy.title}
+                {detail.isError
+                  ? "Detalhes da vaga"
+                  : (vacancy?.title ?? "Detalhes da vaga")}
               </DialogTitle>
-              <p className="mt-1 text-base text-muted-foreground">
-                {vacancy.company_name}
-              </p>
-              {meta ? (
-                <DialogDescription className="mt-1 text-base">
-                  {meta}
-                </DialogDescription>
-              ) : (
-                <DialogDescription className="sr-only">
-                  Detalhes da vaga {vacancy.title} na empresa{" "}
-                  {vacancy.company_name}.
-                </DialogDescription>
-              )}
+              {vacancy && !detail.isError ? (
+                <p className="mt-1 text-base text-muted-foreground">
+                  {vacancy.company_name}
+                </p>
+              ) : null}
+              <DialogDescription className="mt-1 text-base">
+                {meta}
+              </DialogDescription>
             </div>
           </div>
           <DialogClose
@@ -204,45 +150,93 @@ function VacancyDetail({
         </div>
       </DialogHeader>
 
-      <CompatibilitySection match={match} matchedCount={matchedCount} />
-
-      {vacancy.description.trim() ? (
-        <section>
-          <h3 className="mb-2 text-lg font-bold text-foreground">
-            Descrição da vaga
-          </h3>
-          <p className="text-lg leading-6 whitespace-pre-line text-foreground">
-            {vacancy.description}
+      {detail.isPending ? (
+        <p role="status" className="text-lg">
+          Carregando detalhes da vaga…
+        </p>
+      ) : detail.isError ? (
+        <div id={errorId} role="alert" className="flex flex-col gap-3 text-lg">
+          <p>
+            {unavailable
+              ? "Esta vaga não está disponível."
+              : "Não foi possível carregar os detalhes da vaga. Tente novamente."}
           </p>
-        </section>
-      ) : null}
-
-      {applySuccess ? (
-        <div
-          id={successId}
-          role="status"
-          className="rounded-[10px] border border-success bg-background p-4"
-        >
-          <p className="font-mono text-[13px] font-semibold tracking-wide text-success uppercase">
-            Sucesso
-          </p>
-          <p className="mt-1 text-lg text-foreground">Candidatura enviada</p>
+          {!unavailable ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void detail.refetch()}
+            >
+              Tentar novamente
+            </Button>
+          ) : null}
         </div>
-      ) : null}
-
-      {applyError ? (
-        <div
-          id={errorId}
-          role="alert"
-          className="rounded-[10px] border border-destructive bg-background p-4"
-        >
-          <p className="font-mono text-[13px] font-semibold tracking-wide text-destructive uppercase">
-            Erro
+      ) : vacancy ? (
+        <>
+          <section>
+            <h3 className="mb-2 text-lg font-bold">Descrição da vaga</h3>
+            <p className="text-lg leading-7 break-words whitespace-pre-line">
+              {vacancy.description.trim() || "Descrição não informada."}
+            </p>
+          </section>
+          <section>
+            <h3 className="mb-2 text-lg font-bold">
+              Requisitos e competências
+            </h3>
+            {vacancy.skills.length ? (
+              <ul className="list-disc space-y-2 pl-6 text-lg">
+                {vacancy.skills.map((skill) => (
+                  <li key={skill.id}>{skill.name}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-lg">
+                Esta vaga ainda não listou requisitos de habilidades.
+              </p>
+            )}
+          </section>
+          {matchSummary ? (
+            <section>
+              <h3 className="mb-2 text-lg font-bold">Como você se encaixa</h3>
+              <p className="text-lg">
+                Você atende {matchSummary.matchedCount} de{" "}
+                {matchSummary.requiredCount} requisitos
+              </p>
+              {matchSummary.missingNames.length ? (
+                <p className="mt-2 text-lg">
+                  Habilidades em falta: {matchSummary.missingNames.join(", ")}.
+                </p>
+              ) : null}
+            </section>
+          ) : null}
+          <p className="text-lg">
+            Prazo para candidatura:{" "}
+            <time dateTime={vacancy.closing_date}>
+              {vacancy.closing_date.split("-").reverse().join("/")}
+            </time>
           </p>
-          <p className="mt-1 text-lg text-foreground">{applyError}</p>
-        </div>
+          {!vacancy.is_applicable ? (
+            <p role="status" className="text-lg">
+              {applicationStateLabel(vacancy)}
+            </p>
+          ) : null}
+          {detail.isFetching ? (
+            <p role="status" className="text-lg">
+              Atualizando detalhes da vaga…
+            </p>
+          ) : null}
+          {mutation.isSuccess ? (
+            <p role="status" className="text-lg text-success">
+              Candidatura enviada
+            </p>
+          ) : null}
+          {mutation.isError ? (
+            <p id={errorId} role="alert" className="text-lg text-destructive">
+              {applyToJobVacancyErrorMessage(mutation.error)}
+            </p>
+          ) : null}
+        </>
       ) : null}
-
       <DialogFooter>
         <DialogClose
           render={
@@ -251,97 +245,36 @@ function VacancyDetail({
             </Button>
           }
         />
-        {canApply ? (
-          <Button
-            type="button"
-            onClick={onApply}
-            disabled={busy}
-            aria-busy={busy}
-            aria-describedby={applyError ? errorId : undefined}
-            className="rounded-full"
-          >
-            {actionLabel}
-          </Button>
-        ) : (
-          <Button type="button" disabled className="rounded-full">
-            {actionLabel}
-          </Button>
-        )}
+        <Button
+          type="button"
+          className="rounded-full"
+          disabled={
+            !vacancy ||
+            detail.isError ||
+            detail.isFetching ||
+            !vacancy.is_applicable ||
+            mutation.isPending
+          }
+          aria-busy={mutation.isPending}
+          aria-describedby={mutation.isError ? errorId : undefined}
+          onClick={() => mutation.mutate()}
+        >
+          {mutation.isPending
+            ? "Enviando candidatura…"
+            : vacancy && !detail.isError
+              ? applicationStateLabel(vacancy)
+              : "Candidatar-se"}
+        </Button>
       </DialogFooter>
     </>
   );
 }
 
-function CompatibilitySection({
-  match,
-  matchedCount,
-}: {
-  match: ReturnType<typeof matchJobVacancySkills>;
-  matchedCount: number;
-}) {
-  return (
-    <section>
-      <h3 className="mb-2 text-lg font-bold text-foreground">
-        Como você se encaixa
-      </h3>
-      {match.total === 0 ? (
-        <p className="text-lg text-muted-foreground">
-          Esta vaga ainda não listou requisitos de habilidades.
-        </p>
-      ) : (
-        <>
-          <p className="mb-2 text-base text-muted-foreground">
-            Você atende {matchedCount} de {match.total} requisitos
-          </p>
-          <ul className="flex flex-col gap-2">
-            {match.matched.map((skill) => (
-              <li
-                key={`matched-${skill}`}
-                className="flex items-start gap-3 text-lg text-foreground"
-              >
-                <CircleCheck
-                  aria-hidden="true"
-                  className="mt-0.5 size-5 shrink-0 text-foreground"
-                />
-                <span>
-                  <span className="sr-only">Requisito atendido: </span>
-                  {skill}
-                </span>
-              </li>
-            ))}
-            {match.missing.map((skill) => (
-              <li
-                key={`missing-${skill}`}
-                className="flex items-start gap-3 text-lg text-foreground"
-              >
-                <CircleMinus
-                  aria-hidden="true"
-                  className="mt-0.5 size-5 shrink-0 text-muted-foreground"
-                />
-                <span>
-                  <span className="sr-only">Habilidade em falta: </span>
-                  {skill}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </section>
-  );
-}
-
-function applyButtonLabel({
-  busy,
-  alreadyApplied,
-  isClosed,
-}: {
-  busy: boolean;
-  alreadyApplied: boolean;
-  isClosed: boolean;
-}): string {
-  if (busy) return "Enviando candidatura…";
-  if (alreadyApplied) return "Já candidatado";
-  if (isClosed) return "Vaga encerrada";
+function applicationStateLabel(vacancy: JobDetail): string {
+  if (vacancy.already_applied) return "Já candidatado";
+  if (vacancy.is_expired) return "Vaga expirada";
+  if (vacancy.status === "paused") return "Vaga pausada";
+  if (!vacancy.is_open) return "Vaga encerrada";
+  if (!vacancy.is_applicable) return "Candidatura indisponível";
   return "Candidatar-se";
 }

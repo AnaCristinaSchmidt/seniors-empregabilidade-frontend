@@ -2,29 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   companyInitials,
-  formatLocation,
   formatPublishedLabel,
   formatSalaryRange,
   formatVacancyMeta,
   formatWorkMode,
 } from "./job-vacancy-format";
-import type { JobVacancy } from "./job-vacancy-schema";
-
-const vacancy: JobVacancy = {
-  id: "11111111-1111-4111-8111-111111111111",
-  title: "Supervisor de logística",
-  description: "Coordenar a equipe.",
-  company_name: "Moveve Distribuição",
-  city: "São Paulo",
-  state: "SP",
-  work_mode: "onsite",
-  salary_min: 6500,
-  salary_max: 8000,
-  published_at: "2026-09-23",
-  status: "open",
-  has_applied: false,
-  skills: [],
-};
+import { jobDetail } from "../../../tests/job-detail-fixture";
 
 describe("companyInitials", () => {
   it("uses the first letter of the first two words", () => {
@@ -41,21 +24,6 @@ describe("formatWorkMode", () => {
     expect(formatWorkMode("onsite")).toBe("Presencial");
     expect(formatWorkMode("remote")).toBe("Remoto");
     expect(formatWorkMode("hybrid")).toBe("Híbrido");
-  });
-});
-
-describe("formatLocation", () => {
-  it("joins city and state when both exist", () => {
-    expect(formatLocation("São Paulo", "SP")).toBe("São Paulo, SP");
-  });
-
-  it("returns the remaining part when only one exists", () => {
-    expect(formatLocation("Campinas", null)).toBe("Campinas");
-    expect(formatLocation(null, "RJ")).toBe("RJ");
-  });
-
-  it("returns null when both parts are missing", () => {
-    expect(formatLocation(null, null)).toBeNull();
   });
 });
 
@@ -95,8 +63,8 @@ describe("formatPublishedLabel", () => {
 
 describe("formatVacancyMeta", () => {
   it("joins location, work mode, salary and published date", () => {
-    expect(formatVacancyMeta(vacancy, new Date(2026, 8, 26))).toBe(
-      "São Paulo, SP · Presencial · R$\u00a06.500 a R$\u00a08.000 · publicada há 3 dias",
+    expect(formatVacancyMeta(jobDetail, 8000, new Date(2026, 9, 4))).toBe(
+      "Example City · Híbrido · até R$\u00a08.000 · publicada há 3 dias",
     );
   });
 
@@ -104,15 +72,13 @@ describe("formatVacancyMeta", () => {
     expect(
       formatVacancyMeta(
         {
-          ...vacancy,
-          city: null,
-          state: null,
-          salary_min: null,
-          salary_max: null,
-          published_at: "sem-data",
+          ...jobDetail,
+          location: null,
+          published_at: null,
         },
+        null,
         new Date(2026, 8, 26),
       ),
-    ).toBe("Presencial");
+    ).toBe("Híbrido");
   });
 });

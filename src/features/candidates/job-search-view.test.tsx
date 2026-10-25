@@ -12,6 +12,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "@/lib/api-client";
 
+import { jobDetail } from "../../../tests/job-detail-fixture";
+
 import { JobSearchView } from "./job-search-view";
 
 vi.mock("@/lib/api-client", () => ({
@@ -19,7 +21,7 @@ vi.mock("@/lib/api-client", () => ({
 }));
 
 const baseJob = {
-  id: "job-1",
+  id: jobDetail.id,
   title: "Supervisor de Logística",
   company_name: "Move Distribuição",
   location: "São Paulo, SP",
@@ -135,29 +137,42 @@ describe("JobSearchView", () => {
   });
 
   it("opens the vacancy detail from Ver vaga", async () => {
-    vi.spyOn(apiClient, "get").mockResolvedValueOnce({ data: [baseJob] });
+    const get = vi
+      .spyOn(apiClient, "get")
+      .mockResolvedValueOnce({ data: [baseJob] })
+      .mockResolvedValueOnce({ data: { ...jobDetail, title: baseJob.title } });
     const user = userEvent.setup();
 
     render(<JobSearchView />);
     await screen.findByRole("heading", { name: "Supervisor de Logística" });
 
-    await user.click(
-      screen.getByRole("button", { name: "Ver vaga Supervisor de Logística" }),
-    );
+    const opener = screen.getByRole("button", {
+      name: "Ver vaga Supervisor de Logística",
+    });
+    await user.click(opener);
 
     const dialog = await screen.findByRole("dialog");
     expect(
-      within(dialog).getByRole("heading", { name: "Supervisor de Logística" }),
+      await within(dialog).findByRole("heading", {
+        name: "Supervisor de Logística",
+      }),
     ).toBeVisible();
     expect(
       within(dialog).getByText("Você atende 3 de 4 requisitos"),
     ).toBeVisible();
-    expect(within(dialog).getByText("certificação NR-11")).toBeVisible();
+    expect(
+      within(dialog).getByText(/Habilidades em falta: certificação NR-11/),
+    ).toBeVisible();
     expect(
       within(dialog).getByRole("button", { name: "Candidatar-se" }),
     ).toBeEnabled();
     expect(
-      within(dialog).queryByRole("heading", { name: "Descrição da vaga" }),
-    ).not.toBeInTheDocument();
+      within(dialog).getByRole("heading", { name: "Descrição da vaga" }),
+    ).toBeVisible();
+    expect(within(dialog).getByText(jobDetail.description)).toBeVisible();
+    expect(get.mock.calls[1]?.[0]).toBe(`/jobs/${jobDetail.id}`);
+    expect(get.mock.calls[1]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 });

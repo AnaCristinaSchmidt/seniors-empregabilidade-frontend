@@ -54,24 +54,13 @@ function reportViolations(violations: axe.Result[]): void {
 describe("candidate applications", () => {
   beforeEach(() => {
     let current = { ...activeApplication };
-    cy.intercept("POST", "**/auth/login", {
-      body: {
-        access_token: "synthetic-access",
-        id_token: "synthetic-id",
-        refresh_token: null,
-        expires_in: 900,
-        token_type: "Bearer",
-        user_id: activeApplication.id,
-        user_type: "candidate",
-      },
-    });
     cy.intercept("GET", "**/auth/me", {
       body: {
         id: activeApplication.id,
         user_type: "candidate",
         company_status: null,
       },
-    });
+    }).as("currentUser");
     cy.intercept("GET", "**/applications/me*", (req) => {
       const filter =
         new URL(req.url).searchParams.get("company_name")?.toLowerCase() ?? "";
@@ -85,10 +74,17 @@ describe("candidate applications", () => {
       current = { ...current, status: "withdrawn" };
       req.reply({ body: current, delay: 600 });
     }).as("withdraw");
-    cy.visit("/login");
-    cy.get("#email").type("candidate@example.invalid");
-    cy.get("#password").type("SyntheticTest123!");
-    cy.contains("button", "Entrar").click();
+    cy.visit("/candidato", {
+      onBeforeLoad(window) {
+        window.sessionStorage.setItem(
+          "seniors.access-token",
+          "synthetic-access",
+        );
+      },
+    });
+    cy.wait("@currentUser")
+      .its("request.headers.authorization")
+      .should("eq", "Bearer synthetic-access");
     cy.contains("a", "Candidaturas").click();
     cy.wait("@list");
   });
