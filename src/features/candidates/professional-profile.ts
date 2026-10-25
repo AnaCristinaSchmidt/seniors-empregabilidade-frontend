@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { apiClient } from "@/lib/api-client";
@@ -325,18 +325,14 @@ export async function fetchCertificationDocumentUrl(
 // candidate cannot create a new catalog entry, only pick an existing one.
 
 const SKILL_CATALOG_ENDPOINT = "/skills";
-const SKILL_SUGGESTION_LIMIT = 8;
-
-export function skillCatalogQueryKey(search: string) {
-  return ["skills", "catalog", search] as const;
-}
+export const SKILL_CATALOG_LIMIT = 20;
 
 export async function searchSkillCatalog(
   search: string,
   signal?: AbortSignal,
 ): Promise<Skill[]> {
   const response = await apiClient.get<unknown>(SKILL_CATALOG_ENDPOINT, {
-    params: { search, limit: SKILL_SUGGESTION_LIMIT },
+    params: { search, limit: SKILL_CATALOG_LIMIT },
     ...(signal ? { signal } : {}),
   });
   const parsed = z.array(skillSchema).safeParse(response.data);
@@ -347,6 +343,18 @@ export async function searchSkillCatalog(
     });
   }
   return parsed.data;
+}
+
+/** A blank search lists the catalog in alphabetical order. */
+export function skillCatalogQueryOptions(search: string) {
+  return queryOptions({
+    queryKey: ["skills", "catalog", search] as const,
+    queryFn: ({ signal }) => searchSkillCatalog(search, signal),
+    // The previous list stays on screen while the next search loads.
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+    retry: false,
+  });
 }
 
 export async function addProfileSkill(skillId: string): Promise<Skill> {
@@ -365,4 +373,32 @@ export async function addProfileSkill(skillId: string): Promise<Skill> {
 
 export async function removeProfileSkill(skillId: string): Promise<void> {
   await apiClient.delete(`${PROFILE_ENDPOINT}/skills/${skillId}`);
+}
+
+/** Compare catalog IDs; display order does not change the saved selection. */
+export function sameSkillSelection(
+  left: readonly Skill[],
+  right: readonly Skill[],
+): boolean {
+  const ids = new Set(left.map((skill) => skill.id));
+  return ids.size === right.length && right.every((skill) => ids.has(skill.id));
+}
+
+export const MAX_SELECTED_SKILLS = 100;
+
+/** Replace the whole skill set in one backend transaction. */
+export async function saveSkillSelection(
+  selected: readonly Skill[],
+): Promise<Skill[]> {
+  const response = await apiClient.put<unknown>(`${PROFILE_ENDPOINT}/skills`, {
+    skill_ids: selected.map((skill) => skill.id),
+  });
+  const parsed = z.array(skillSchema).safeParse(response.data);
+  if (!parsed.success) {
+    throw new ApiError({
+      message: "Não foi possível validar as habilidades salvas.",
+      code: "invalid_skill_response",
+    });
+  }
+  return parsed.data;
 }

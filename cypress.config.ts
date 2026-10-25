@@ -7,6 +7,15 @@ export default defineConfig({
     supportFile: "cypress/support/e2e.ts",
     video: false,
     screenshotOnRunFailure: true,
+    setupNodeEvents(on) {
+      // Lets specs print to the terminal, where CI logs are read.
+      on("task", {
+        log(message: string) {
+          console.log(message);
+          return null;
+        },
+      });
+    },
   },
   retries: {
     runMode: 1,

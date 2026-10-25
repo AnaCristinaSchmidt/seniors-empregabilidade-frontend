@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { DialogClose, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 import { skillTypeLabels, workModeLabels } from "./job-labels";
 import {
@@ -27,7 +28,6 @@ import {
   skillSuggestionsQueryOptions,
 } from "./jobs-api";
 import type { JobPostingFailure } from "./jobs-errors";
-import { useDebouncedValue } from "./use-debounced-value";
 
 const SUGGESTION_DELAY_MS = 300;
 

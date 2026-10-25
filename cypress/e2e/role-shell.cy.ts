@@ -24,6 +24,13 @@ function stubSignIn(userType: string): void {
     statusCode: 200,
     body: { id: USER_ID, user_type: userType, company_status: null },
   }).as("currentUser");
+
+  // The header counter asks for the unread total; answer it so the shell
+  // renders the same way on every run.
+  cy.intercept("GET", /\/notifications\/me(\?|$)/, {
+    statusCode: 200,
+    body: { items: [], unread_count: 3, next_cursor: null },
+  }).as("unreadCount");
 }
 
 function signIn(userType: string): void {
@@ -45,7 +52,9 @@ describe("role area shell", () => {
       cy.contains("button", "Sair").should("be.visible");
     });
     cy.contains("Olá!").should("be.visible");
-    cy.contains("Notificações").should("be.visible");
+    cy.get('a[href="/candidato/notificacoes"]')
+      .should("be.visible")
+      .and("contain.text", "Notificações 3 não lidas");
     cy.contains("Suporte no WhatsApp").should("be.visible");
   });
 
@@ -69,14 +78,19 @@ describe("role area shell", () => {
     cy.location("pathname").should("eq", "/candidato");
   });
 
-  it("shows the company sidebar without the greeting header", () => {
+  it("shows the company sidebar and a header with its notifications", () => {
     signIn("company");
 
     cy.get("aside").within(() => {
       cy.contains("Área da empresa").should("be.visible");
       cy.contains("button", "Sair").should("be.visible");
     });
-    cy.contains("Olá!").should("not.exist");
+    // Companies receive notifications (new applications), so their area now
+    // has the header that holds the notifications link.
+    cy.contains("Olá!").should("be.visible");
+    cy.get('a[href="/empresa/notificacoes"]')
+      .should("be.visible")
+      .and("contain.text", "Notificações 3 não lidas");
   });
 
   it("shows the administrator sidebar without the greeting header", () => {
@@ -87,6 +101,7 @@ describe("role area shell", () => {
       cy.contains("button", "Sair").should("be.visible");
     });
     cy.contains("Olá!").should("not.exist");
+    cy.contains("Notificações").should("not.exist");
   });
 
   it("signs out back to the login screen", () => {

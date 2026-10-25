@@ -40,12 +40,12 @@ describe("profileErrorMessage", () => {
 describe("profileSaveErrorMessage", () => {
   it("translates a save-specific error code", () => {
     const error = new ApiError({
-      message: "The skill is already in the profile.",
-      code: "skill_already_added",
+      message: "The skill was not found.",
+      code: "skill_not_found",
     });
 
     expect(profileSaveErrorMessage(error)).toBe(
-      "Esta habilidade já está no seu perfil.",
+      "Uma das habilidades escolhidas não está mais disponível. Revise a seleção no catálogo e tente salvar novamente.",
     );
   });
 

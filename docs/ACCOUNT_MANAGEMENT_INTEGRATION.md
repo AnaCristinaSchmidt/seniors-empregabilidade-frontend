@@ -58,10 +58,10 @@ target, previous/new statuses and reason in the same transaction.
 No new dependency or migration is needed. Final human review and deployment
 remain delivery steps.
 
-Local validation on 2026-10-25 passed all 915 backend tests (98.94% coverage),
-536 frontend tests (94.66% statement and 88.18% branch coverage), the production
-build and all 60 Cypress tests. Formatting, Ruff, strict mypy, ESLint and
-TypeScript also passed.
+Local validation on 2026-10-25 passed the backend and frontend test suites,
+coverage gates, production build and full Cypress suite. Formatting, Ruff,
+strict mypy, ESLint and TypeScript also passed. The accompanying pull requests
+record the final totals after incorporating the latest main branch.
 
 The production build additionally passed a real-API browser exercise with
 PostgreSQL 18.4: US-08 and account filters agreed, stale 0/100 percentages did

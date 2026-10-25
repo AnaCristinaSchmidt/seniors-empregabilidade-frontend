@@ -1,9 +1,19 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -21,11 +31,11 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { ApiError } from "@/lib/api-error";
 
 import { startDownload } from "./certification-download";
 import { profileSaveErrorMessage } from "./professional-profile-errors";
 import {
-  addProfileSkill,
   CERTIFICATE_ACCEPT,
   certificateFileProblem,
   certificationValuesSchema,
@@ -40,9 +50,8 @@ import {
   fetchCertificationDocumentUrl,
   experienceValuesSchema,
   professionalProfileQueryKey,
-  removeProfileSkill,
-  searchSkillCatalog,
-  skillCatalogQueryKey,
+  saveSkillSelection,
+  sameSkillSelection,
   updateCertificationById,
   updateEducationById,
   updateExperienceById,
@@ -62,6 +71,8 @@ import {
   type ProfessionalProfileUpdateValues,
 } from "./professional-profile-update-schema";
 import { updateProfessionalProfile } from "./professional-profile-update";
+import { SkillSelection } from "./skill-selection";
+import { SectionHeading } from "./section-heading";
 
 interface EditProfileModalProps {
   open: boolean;
@@ -86,45 +97,14 @@ export function EditProfileModal({
   onOpenChange,
   profile,
 }: EditProfileModalProps) {
-  const queryClient = useQueryClient();
-
-  // Experiences, education and skills are saved one item at a time, before
-  // (or even without) "Salvar alterações". Refetching whenever the modal
-  // closes, including "Cancelar" and Esc, keeps "Meu perfil" in step with
-  // what the server actually stored.
-  function handleOpenChange(nextOpen: boolean) {
-    onOpenChange(nextOpen);
-    if (!nextOpen) {
-      void queryClient.invalidateQueries({
-        queryKey: professionalProfileQueryKey,
-      });
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-2xl">Editar perfil</DialogTitle>
-          <Separator />
-        </DialogHeader>
-
-        {/* Só renderiza (e monta) o formulário quando o modal está
-            aberto. Isso faz o React criar uma instância nova — com todo
-            o estado local (react-hook-form, experiências, etc.) fresco —
-            toda vez que ele abre, sem precisar de um efeito pra "resetar"
-            nada (o que o ESLint não deixa fazer chamando setState direto
-            dentro de um effect) e sem precisar mexer em quem usa esse
-            componente (o ProfileView não muda nada). */}
-        {open ? (
-          <EditProfileForm profile={profile} onOpenChange={handleOpenChange} />
-        ) : null}
-      </DialogContent>
-    </Dialog>
-  );
+  // Mount a fresh draft on each opening, without resetting an active edit
+  // when a background profile query updates.
+  return open ? (
+    <EditProfileEditor profile={profile} onOpenChange={onOpenChange} />
+  ) : null;
 }
 
-function EditProfileForm({
+function EditProfileEditor({
   profile,
   onOpenChange,
 }: {
@@ -136,7 +116,7 @@ function EditProfileForm({
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<ProfessionalProfileUpdateValues>({
     resolver: zodResolver(professionalProfileUpdateSchema),
     defaultValues: defaultValuesFrom(profile),
@@ -150,8 +130,25 @@ function EditProfileForm({
     profile.certifications,
   );
   const [skills, setSkills] = useState<Skill[]>(profile.skills);
+  const [savedSkills, setSavedSkills] = useState<Skill[]>(profile.skills);
+  const [skillsWereSaved, setSkillsWereSaved] = useState(false);
+  const [failedStep, setFailedStep] = useState<"skills" | "profile" | null>(
+    null,
+  );
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const closeTimeoutRef = useRef<number | null>(null);
+  const saveErrorRef = useRef<HTMLDivElement>(null);
+  const keepEditingRef = useRef<HTMLButtonElement>(null);
+
+  function closeEditor() {
+    onOpenChange(false);
+    // Collection edits and the skills PUT can already be persisted even if
+    // the profile PATCH has not succeeded.
+    void queryClient.invalidateQueries({
+      queryKey: professionalProfileQueryKey,
+    });
+  }
 
   useEffect(() => {
     return () => {
@@ -162,151 +159,246 @@ function EditProfileForm({
   }, []);
 
   const mutation = useMutation({
-    mutationFn: updateProfessionalProfile,
+    mutationFn: async (values: ProfessionalProfileUpdateValues) => {
+      if (!sameSkillSelection(savedSkills, skills)) {
+        setFailedStep("skills");
+        const stored = await saveSkillSelection(skills);
+        setSavedSkills(stored);
+        setSkillsWereSaved(true);
+      }
+      setFailedStep("profile");
+      return updateProfessionalProfile(values);
+    },
+    onError: (error) => {
+      // A missing skill must not require closing and losing the draft.
+      if (error instanceof ApiError && error.code === "skill_not_found") {
+        void queryClient.invalidateQueries({ queryKey: ["skills", "catalog"] });
+      }
+    },
     onSuccess: (updated) => {
       // The PATCH answers with the whole stored profile, including the
       // items already saved one by one, so it can replace the cache as is.
       queryClient.setQueryData(professionalProfileQueryKey, updated);
 
       setJustSaved(true);
-      closeTimeoutRef.current = window.setTimeout(
-        () => onOpenChange(false),
-        900,
-      );
+      closeTimeoutRef.current = window.setTimeout(closeEditor, 900);
     },
   });
+
+  useEffect(() => {
+    if (mutation.isError) {
+      saveErrorRef.current?.focus();
+    }
+  }, [mutation.isError, mutation.error]);
+
+  function requestClose() {
+    if (mutation.isPending || justSaved) return;
+    if (isDirty || !sameSkillSelection(savedSkills, skills)) {
+      setConfirmDiscard(true);
+    } else {
+      closeEditor();
+    }
+  }
 
   function onSubmit(values: ProfessionalProfileUpdateValues) {
     mutation.mutate(values);
   }
 
   return (
-    <form
-      noValidate
-      className="flex flex-col gap-6"
-      onSubmit={(event) => {
-        void handleSubmit(onSubmit)(event);
+    <Dialog
+      open
+      onOpenChange={(nextOpen, details) => {
+        if (!nextOpen) {
+          details.cancel();
+          requestClose();
+        }
       }}
     >
-      {justSaved ? (
-        <p
-          role="status"
-          className="rounded-lg border border-success/30 bg-success/5 px-4 py-3 text-lg text-success"
+      <DialogContent
+        className="max-h-[90vh] max-w-3xl overflow-y-auto"
+        showCloseButton={!mutation.isPending && !justSaved}
+      >
+        <DialogHeader>
+          <DialogTitle className="text-2xl">Editar perfil</DialogTitle>
+          <Separator />
+        </DialogHeader>
+        <form
+          noValidate
+          className="flex min-w-0 flex-col gap-6"
+          onSubmit={(event) => {
+            void handleSubmit(onSubmit)(event);
+          }}
         >
-          Perfil atualizado com sucesso.
-        </p>
-      ) : null}
-      {mutation.isError ? (
-        <p
-          role="alert"
-          className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-lg text-destructive"
-        >
-          {profileSaveErrorMessage(mutation.error)}
-        </p>
-      ) : null}
+          <fieldset
+            aria-label="Dados do perfil"
+            disabled={mutation.isPending || justSaved}
+            className="flex min-w-0 flex-col gap-6"
+          >
+            <PhotoField />
 
-      <PhotoField />
+            <Field>
+              <FieldLabel htmlFor="full_name">Nome completo</FieldLabel>
+              <Input
+                id="full_name"
+                aria-invalid={errors.full_name ? true : undefined}
+                aria-describedby={
+                  errors.full_name ? "full_name-error" : undefined
+                }
+                {...register("full_name")}
+              />
+              <FieldError id="full_name-error" errors={[errors.full_name]} />
+            </Field>
 
-      <Field>
-        <FieldLabel htmlFor="full_name">Nome completo</FieldLabel>
-        <Input
-          id="full_name"
-          aria-invalid={errors.full_name ? true : undefined}
-          aria-describedby={errors.full_name ? "full_name-error" : undefined}
-          {...register("full_name")}
-        />
-        <FieldError id="full_name-error" errors={[errors.full_name]} />
-      </Field>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[116px_minmax(0,1fr)_170px]">
+              <Field>
+                <FieldLabel htmlFor="age">Idade</FieldLabel>
+                <Input
+                  id="age"
+                  value={`${profile.age} anos`}
+                  disabled
+                  aria-label="Idade — calculada automaticamente, não é editável"
+                />
+              </Field>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-[116px_minmax(0,1fr)_170px]">
-        <Field>
-          <FieldLabel htmlFor="age">Idade</FieldLabel>
-          <Input
-            id="age"
-            value={`${profile.age} anos`}
-            disabled
-            aria-label="Idade — calculada automaticamente, não é editável"
-          />
-        </Field>
+              <Field>
+                <FieldLabel htmlFor="email">E-mail</FieldLabel>
+                <Input id="email" value={profile.email} disabled />
+              </Field>
 
-        <Field>
-          <FieldLabel htmlFor="email">E-mail</FieldLabel>
-          <Input id="email" value={profile.email} disabled />
-        </Field>
+              <Field>
+                <FieldLabel htmlFor="phone">Telefone</FieldLabel>
+                <Input
+                  id="phone"
+                  type="tel"
+                  aria-invalid={errors.phone ? true : undefined}
+                  aria-describedby={errors.phone ? "phone-error" : undefined}
+                  {...register("phone")}
+                />
+                <FieldError id="phone-error" errors={[errors.phone]} />
+              </Field>
+            </div>
 
-        <Field>
-          <FieldLabel htmlFor="phone">Telefone</FieldLabel>
-          <Input
-            id="phone"
-            type="tel"
-            aria-invalid={errors.phone ? true : undefined}
-            aria-describedby={errors.phone ? "phone-error" : undefined}
-            {...register("phone")}
-          />
-          <FieldError id="phone-error" errors={[errors.phone]} />
-        </Field>
-      </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_120px]">
+              <Field>
+                <FieldLabel htmlFor="city">Cidade</FieldLabel>
+                <Input
+                  id="city"
+                  aria-invalid={errors.city ? true : undefined}
+                  aria-describedby={errors.city ? "city-error" : undefined}
+                  {...register("city")}
+                />
+                <FieldError id="city-error" errors={[errors.city]} />
+              </Field>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_120px]">
-        <Field>
-          <FieldLabel htmlFor="city">Cidade</FieldLabel>
-          <Input
-            id="city"
-            aria-invalid={errors.city ? true : undefined}
-            aria-describedby={errors.city ? "city-error" : undefined}
-            {...register("city")}
-          />
-          <FieldError id="city-error" errors={[errors.city]} />
-        </Field>
+              <Field>
+                <FieldLabel htmlFor="state">Estado</FieldLabel>
+                <Input
+                  id="state"
+                  maxLength={2}
+                  className="uppercase"
+                  aria-invalid={errors.state ? true : undefined}
+                  aria-describedby={errors.state ? "state-error" : undefined}
+                  {...register("state")}
+                />
+                <FieldError id="state-error" errors={[errors.state]} />
+              </Field>
+            </div>
 
-        <Field>
-          <FieldLabel htmlFor="state">Estado</FieldLabel>
-          <Input
-            id="state"
-            maxLength={2}
-            className="uppercase"
-            aria-invalid={errors.state ? true : undefined}
-            aria-describedby={errors.state ? "state-error" : undefined}
-            {...register("state")}
-          />
-          <FieldError id="state-error" errors={[errors.state]} />
-        </Field>
-      </div>
+            <Field>
+              <FieldLabel htmlFor="summary">Resumo</FieldLabel>
+              <Textarea
+                id="summary"
+                rows={4}
+                aria-invalid={errors.summary ? true : undefined}
+                aria-describedby={errors.summary ? "summary-error" : undefined}
+                {...register("summary")}
+              />
+              <FieldError id="summary-error" errors={[errors.summary]} />
+            </Field>
 
-      <Field>
-        <FieldLabel htmlFor="summary">Resumo</FieldLabel>
-        <Textarea
-          id="summary"
-          rows={4}
-          aria-invalid={errors.summary ? true : undefined}
-          aria-describedby={errors.summary ? "summary-error" : undefined}
-          {...register("summary")}
-        />
-        <FieldError id="summary-error" errors={[errors.summary]} />
-      </Field>
+            <ExperienceFieldset
+              experiences={experiences}
+              onChange={setExperiences}
+            />
+            <EducationFieldset education={education} onChange={setEducation} />
+            <CertificationFieldset
+              certifications={certifications}
+              onChange={setCertifications}
+            />
+            <SkillSelection
+              selected={skills}
+              onChange={setSkills}
+              disabled={mutation.isPending || justSaved}
+            />
+          </fieldset>
 
-      <ExperienceFieldset experiences={experiences} onChange={setExperiences} />
-      <EducationFieldset education={education} onChange={setEducation} />
-      <CertificationFieldset
-        certifications={certifications}
-        onChange={setCertifications}
-      />
-      <SkillsFieldset skills={skills} onChange={setSkills} />
+          {justSaved ? (
+            <p
+              role="status"
+              className="rounded-lg border border-success/30 bg-success/5 px-4 py-3 text-lg text-success"
+            >
+              Perfil atualizado com sucesso.
+            </p>
+          ) : null}
+          {mutation.isError ? (
+            <div
+              ref={saveErrorRef}
+              tabIndex={-1}
+              role="alert"
+              className="rounded-lg border border-destructive bg-background px-4 py-3 text-lg text-destructive outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <p>{profileSaveErrorMessage(mutation.error)}</p>
+              {failedStep === "profile" && skillsWereSaved ? (
+                <p className="mt-2">
+                  As habilidades foram salvas. Não foi possível confirmar o
+                  salvamento dos outros dados do perfil. Tente salvar novamente.
+                </p>
+              ) : null}
+              {failedStep === "skills" ? (
+                <p className="mt-2">
+                  Sua seleção foi mantida para você revisar e tentar novamente.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
-      <DialogFooter>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={mutation.isPending || justSaved}
-          onClick={() => onOpenChange(false)}
-        >
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={mutation.isPending || justSaved}>
-          {mutation.isPending ? "Salvando..." : "Salvar alterações"}
-        </Button>
-      </DialogFooter>
-    </form>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={mutation.isPending || justSaved}
+              onClick={requestClose}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={mutation.isPending || justSaved}>
+              {mutation.isPending ? "Salvando..." : "Salvar alterações"}
+            </Button>
+          </DialogFooter>
+        </form>
+        <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
+          <AlertDialogContent initialFocus={keepEditingRef}>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                Descartar as alterações não salvas?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                As alterações que ainda não foram salvas serão perdidas. O que
+                já foi salvo será mantido.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel ref={keepEditingRef}>
+                Continuar editando
+              </AlertDialogCancel>
+              <AlertDialogAction variant="destructive" onClick={closeEditor}>
+                Descartar alterações
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -318,7 +410,7 @@ function PhotoField() {
   return (
     <Field>
       <FieldLabel>Foto de perfil</FieldLabel>
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4">
         <div
           aria-hidden
           className="flex h-18 w-18 shrink-0 items-center justify-center rounded-full border border-dashed border-input bg-accent/40 text-base text-foreground-2"
@@ -340,10 +432,6 @@ function PhotoField() {
       </div>
     </Field>
   );
-}
-
-function SectionHeading({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-xl font-bold text-foreground">{children}</h3>;
 }
 
 // ---------- Experiência ----------
@@ -546,7 +634,7 @@ function ExperienceFieldset({
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <SectionHeading>Experiência</SectionHeading>
         <Button
           type="button"
@@ -809,7 +897,7 @@ function EducationFieldset({
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <SectionHeading>Formação</SectionHeading>
         <Button
           type="button"
@@ -1161,7 +1249,7 @@ function CertificationFieldset({
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <SectionHeading>Certificações</SectionHeading>
         <Button
           type="button"
@@ -1246,202 +1334,6 @@ function CertificationFieldset({
           {editingId === "new" ? renderEditForm("new") : null}
         </div>
       )}
-    </div>
-  );
-}
-
-// ---------- Habilidades ----------
-
-const SKILL_SEARCH_DELAY_MS = 250;
-
-// Case- and accent-insensitive, like the catalog search on the backend.
-function comparableSkillName(name: string): string {
-  return name
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .trim()
-    .toLowerCase();
-}
-
-function SkillsFieldset({
-  skills,
-  onChange,
-}: {
-  skills: Skill[];
-  onChange: (skills: Skill[]) => void;
-}) {
-  const [draftName, setDraftName] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [itemError, setItemError] = useState<string | null>(null);
-  const inputId = useId();
-  const hintId = useId();
-
-  // Waits for a pause in typing so each keystroke does not become a request.
-  useEffect(() => {
-    const timeoutId = window.setTimeout(
-      () => setSearchTerm(draftName.trim()),
-      SKILL_SEARCH_DELAY_MS,
-    );
-    return () => window.clearTimeout(timeoutId);
-  }, [draftName]);
-
-  const catalog = useQuery({
-    queryKey: skillCatalogQueryKey(searchTerm),
-    queryFn: ({ signal }) => searchSkillCatalog(searchTerm, signal),
-    enabled: searchTerm.length > 0,
-    retry: false,
-  });
-
-  const addMutation = useMutation({ mutationFn: addProfileSkill });
-  const removeMutation = useMutation({ mutationFn: removeProfileSkill });
-  const isBusy = addMutation.isPending || removeMutation.isPending;
-
-  const linkedIds = new Set(skills.map((skill) => skill.id));
-  const suggestions =
-    searchTerm.length > 0 && catalog.data
-      ? catalog.data.filter((skill) => !linkedIds.has(skill.id))
-      : [];
-
-  async function addSkill(skill: Skill) {
-    setItemError(null);
-    try {
-      const added = await addMutation.mutateAsync(skill.id);
-      onChange([...skills, added]);
-      setDraftName("");
-      setSearchTerm("");
-    } catch (error) {
-      setItemError(profileSaveErrorMessage(error));
-    }
-  }
-
-  async function removeSkill(skill: Skill) {
-    setItemError(null);
-    try {
-      await removeMutation.mutateAsync(skill.id);
-      onChange(skills.filter((item) => item.id !== skill.id));
-    } catch (error) {
-      setItemError(profileSaveErrorMessage(error));
-    }
-  }
-
-  // Enter adds the suggestion whose name matches what was typed, or the only
-  // suggestion left; otherwise the person picks one from the list.
-  function addTypedSkill() {
-    const typed = comparableSkillName(draftName);
-    if (!typed) {
-      return;
-    }
-    const alreadyLinked = skills.some(
-      (skill) => comparableSkillName(skill.name) === typed,
-    );
-    if (alreadyLinked) {
-      setItemError("Esta habilidade já está no seu perfil.");
-      return;
-    }
-    const exactMatch = suggestions.find(
-      (skill) => comparableSkillName(skill.name) === typed,
-    );
-    const choice =
-      exactMatch ?? (suggestions.length === 1 ? suggestions[0] : undefined);
-    if (choice) {
-      void addSkill(choice);
-    }
-  }
-
-  function suggestionsStatus(): string | null {
-    if (searchTerm.length === 0) {
-      return null;
-    }
-    if (catalog.isFetching) {
-      return "Buscando habilidades...";
-    }
-    if (catalog.isError) {
-      return "Não foi possível buscar as habilidades. Tente novamente.";
-    }
-    if (suggestions.length === 0) {
-      return "Nenhuma habilidade encontrada no catálogo.";
-    }
-    return null;
-  }
-
-  const status = suggestionsStatus();
-
-  return (
-    <div>
-      <SectionHeading>Habilidades</SectionHeading>
-      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-input p-3">
-        {skills.map((skill) => (
-          <span
-            key={skill.id}
-            className="flex items-center gap-1.5 rounded-full border border-border bg-accent px-3 py-1.5 text-base text-foreground"
-          >
-            {skill.name}
-            <button
-              type="button"
-              disabled={isBusy}
-              onClick={() => void removeSkill(skill)}
-              aria-label={`Remover habilidade ${skill.name}`}
-              className="rounded-full text-foreground-2 hover:text-destructive focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:text-disabled-foreground"
-            >
-              ×
-            </button>
-          </span>
-        ))}
-        <label htmlFor={inputId} className="sr-only">
-          Adicionar habilidade
-        </label>
-        <Input
-          id={inputId}
-          value={draftName}
-          disabled={addMutation.isPending}
-          onChange={(event) => {
-            setDraftName(event.target.value);
-            setItemError(null);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              addTypedSkill();
-            }
-          }}
-          placeholder="Busque uma habilidade"
-          aria-describedby={hintId}
-          className="h-9 w-56 border-none px-2 shadow-none focus-visible:ring-0"
-        />
-      </div>
-      {suggestions.length > 0 ? (
-        <ul
-          aria-label="Sugestões de habilidades"
-          className="mt-2 flex flex-wrap gap-2"
-        >
-          {suggestions.map((skill) => (
-            <li key={skill.id}>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isBusy}
-                onClick={() => void addSkill(skill)}
-              >
-                {skill.name}
-              </Button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {status ? (
-        <p role="status" className="mt-2 text-base text-muted-foreground">
-          {status}
-        </p>
-      ) : null}
-      {itemError ? (
-        <p role="alert" className="mt-2 text-base text-destructive">
-          {itemError}
-        </p>
-      ) : null}
-      <p id={hintId} className="mt-2 text-base text-muted-foreground">
-        Escolha as habilidades do catálogo. São elas que a vaga compara para
-        dizer quantos requisitos você atende.
-      </p>
     </div>
   );
 }
