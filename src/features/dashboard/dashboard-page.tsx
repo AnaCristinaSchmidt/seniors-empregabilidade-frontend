@@ -12,7 +12,7 @@ import {
 } from "./dashboard-api";
 
 const selectClassName =
-  "h-12 w-full rounded-md border border-input bg-background px-3 text-lg text-foreground focus-visible:outline-ring";
+  "h-12 w-full rounded-md border border-input bg-background px-3 text-lg text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring";
 const indicators = [
   ["candidates", "Profissionais"],
   ["companies", "Empresas"],
