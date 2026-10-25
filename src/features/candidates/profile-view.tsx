@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 
+import { AutomaticApplicationSection } from "./automatic-application-section";
 import { startDownload } from "./certification-download";
 import { EditProfileModal } from "./edit-profile-modal";
 import {
@@ -89,6 +90,13 @@ export function ProfileView() {
           <section className="rounded-lg border border-border bg-background p-6">
             <SkillsSection skills={profile.skills} />
           </section>
+          {profile.accepts_automatic_application === undefined ? null : (
+            <section className="rounded-lg border border-border bg-background p-6">
+              <AutomaticApplicationSection
+                enabled={profile.accepts_automatic_application}
+              />
+            </section>
+          )}
         </div>
       </div>
     </main>

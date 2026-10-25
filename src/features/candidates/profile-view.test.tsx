@@ -288,3 +288,89 @@ describe("ProfileView", () => {
     );
   });
 });
+
+describe("ProfileView - automatic application", () => {
+  const toggle = () =>
+    screen.getByRole("switch", { name: "Candidaturas automáticas" });
+
+  it("hides the choice while the API does not return it", async () => {
+    vi.spyOn(apiClient, "get").mockResolvedValueOnce({ data: validProfile });
+
+    render(<ProfileView />);
+
+    await screen.findByText("Marcos Silveira");
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+  });
+
+  it("explains the choice and saves only this field when turned on", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(apiClient, "get").mockResolvedValueOnce({
+      data: { ...validProfile, accepts_automatic_application: false },
+    });
+    const patch = vi.spyOn(apiClient, "patch").mockResolvedValueOnce({
+      data: { ...validProfile, accepts_automatic_application: true },
+    });
+
+    render(<ProfileView />);
+    await screen.findByText("Marcos Silveira");
+    expect(toggle()).not.toBeChecked();
+    expect(screen.getByText("Desligadas")).toBeVisible();
+    expect(toggle()).toHaveAccessibleDescription(
+      /candidata você automaticamente às vagas com alta compatibilidade/,
+    );
+
+    await user.click(toggle());
+
+    expect(patch).toHaveBeenCalledWith("/professionals/me", {
+      accepts_automatic_application: true,
+    });
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Candidaturas automáticas ligadas.",
+    );
+    expect(toggle()).toBeChecked();
+    expect(screen.getByText("Ligadas")).toBeVisible();
+    expect(toggle()).not.toHaveAttribute("aria-disabled", "true");
+    expect(toggle()).toHaveFocus();
+  });
+
+  it("turns the choice off", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(apiClient, "get").mockResolvedValueOnce({
+      data: { ...validProfile, accepts_automatic_application: true },
+    });
+    vi.spyOn(apiClient, "patch").mockResolvedValueOnce({
+      data: { ...validProfile, accepts_automatic_application: false },
+    });
+
+    render(<ProfileView />);
+    await screen.findByText("Marcos Silveira");
+    expect(toggle()).toBeChecked();
+
+    await user.click(toggle());
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Candidaturas automáticas desligadas.",
+    );
+    expect(toggle()).not.toBeChecked();
+  });
+
+  it("keeps the saved choice and explains a failure", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(apiClient, "get").mockResolvedValueOnce({
+      data: { ...validProfile, accepts_automatic_application: false },
+    });
+    vi.spyOn(apiClient, "patch").mockRejectedValueOnce(
+      new ApiError({ message: "Network error.", code: "network_error" }),
+    );
+
+    render(<ProfileView />);
+    await screen.findByText("Marcos Silveira");
+
+    await user.click(toggle());
+
+    expect(await screen.findByRole("alert")).toBeVisible();
+    expect(toggle()).not.toBeChecked();
+    expect(toggle()).not.toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("status")).not.toHaveTextContent("ligadas");
+  });
+});
