@@ -9,7 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "@/lib/api-client";
 import { ApiError } from "@/lib/api-error";
@@ -52,6 +52,16 @@ function render(element: ReactElement, client = new QueryClient()) {
     <QueryClientProvider client={client}>{element}</QueryClientProvider>,
   );
 }
+
+// The skill section loads the catalog as soon as the modal opens.
+beforeEach(() => {
+  vi.spyOn(apiClient, "get").mockResolvedValue({
+    data: [
+      { id: "s1", name: "Liderança", type: "soft" },
+      { id: "s2", name: "Negociação", type: "soft" },
+    ],
+  });
+});
 
 afterEach(() => {
   cleanup();
@@ -231,174 +241,121 @@ describe("EditProfileModal", () => {
   });
 
   describe("skills", () => {
-    it("removes a skill through the skills endpoint", async () => {
+    const negotiation = { id: "s2", name: "Negociação", type: "soft" };
+
+    async function chooseNegotiationInsteadOfLeadership(
+      user: ReturnType<typeof userEvent.setup>,
+    ) {
+      const catalog = await screen.findByRole("list", {
+        name: "Catálogo de habilidades",
+      });
+      await user.click(
+        within(catalog).getByRole("button", { name: "Negociação" }),
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Remover habilidade Liderança" }),
+      );
+    }
+
+    it("saves the chosen skills together with the résumé", async () => {
       const user = userEvent.setup();
-      const remove = vi
-        .spyOn(apiClient, "delete")
-        .mockResolvedValueOnce({ data: undefined });
+      const client = new QueryClient();
+      const put = vi
+        .spyOn(apiClient, "put")
+        .mockResolvedValueOnce({ data: [negotiation] });
+      const saved = { ...baseProfile, skills: [negotiation] };
+      const patch = vi
+        .spyOn(apiClient, "patch")
+        .mockResolvedValueOnce({ data: saved });
 
       render(
         <EditProfileModal open onOpenChange={vi.fn()} profile={baseProfile} />,
+        client,
       );
+
+      await chooseNegotiationInsteadOfLeadership(user);
+      expect(put).not.toHaveBeenCalled();
 
       await user.click(
-        screen.getByRole("button", { name: /remover habilidade liderança/i }),
+        screen.getByRole("button", { name: /salvar alterações/i }),
       );
 
-      await waitFor(() =>
-        expect(screen.queryByText("Liderança")).not.toBeInTheDocument(),
+      await screen.findByText("Perfil atualizado com sucesso.");
+      expect(put).toHaveBeenCalledWith("/professionals/me/skills", {
+        skill_ids: ["s2"],
+      });
+      expect(patch.mock.invocationCallOrder[0]).toBeGreaterThan(
+        put.mock.invocationCallOrder[0]!,
       );
-      expect(remove).toHaveBeenCalledWith("/professionals/me/skills/s1");
+      expect(client.getQueryData(profileQueryKey)).toEqual(saved);
     });
 
-    it("keeps a skill whose removal fails and says why", async () => {
+    it("confirms before discarding the chosen skills", async () => {
       const user = userEvent.setup();
-      vi.spyOn(apiClient, "delete").mockRejectedValueOnce(
-        new ApiError({ message: "Network Error" }),
-      );
+      const onOpenChange = vi.fn();
+      const remove = vi.spyOn(apiClient, "delete");
+      const post = vi.spyOn(apiClient, "post");
 
       render(
-        <EditProfileModal open onOpenChange={vi.fn()} profile={baseProfile} />,
+        <EditProfileModal
+          open
+          onOpenChange={onOpenChange}
+          profile={baseProfile}
+        />,
       );
 
+      await chooseNegotiationInsteadOfLeadership(user);
+      await user.click(screen.getByRole("button", { name: /^cancelar$/i }));
+
+      expect(onOpenChange).not.toHaveBeenCalled();
       await user.click(
-        screen.getByRole("button", { name: /remover habilidade liderança/i }),
+        screen.getByRole("button", { name: "Descartar alterações" }),
+      );
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+      expect(remove).not.toHaveBeenCalled();
+      expect(post).not.toHaveBeenCalled();
+    });
+
+    it("keeps the selection when bulk saving fails and retries the whole set", async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      const put = vi
+        .spyOn(apiClient, "put")
+        .mockRejectedValueOnce(new ApiError({ message: "Network Error" }))
+        .mockResolvedValueOnce({ data: [negotiation] });
+      const patch = vi.spyOn(apiClient, "patch").mockResolvedValueOnce({
+        data: { ...baseProfile, skills: [negotiation] },
+      });
+
+      render(
+        <EditProfileModal
+          open
+          onOpenChange={onOpenChange}
+          profile={baseProfile}
+        />,
+      );
+
+      await chooseNegotiationInsteadOfLeadership(user);
+      await user.click(
+        screen.getByRole("button", { name: /salvar alterações/i }),
       );
 
       expect(await screen.findByRole("alert")).toHaveTextContent(
         "Não foi possível salvar a alteração. Tente novamente.",
       );
-      expect(screen.getByText("Liderança")).toBeVisible();
-    });
-
-    it("searches the catalog and adds the chosen skill by its id", async () => {
-      const user = userEvent.setup();
-      const get = vi.spyOn(apiClient, "get").mockResolvedValue({
-        data: [
-          { id: "s1", name: "Liderança", type: "soft" },
-          { id: "s2", name: "Negociação", type: "soft" },
-          { id: "s3", name: "Negócios internacionais", type: "hard" },
-        ],
-      });
-      const post = vi.spyOn(apiClient, "post").mockResolvedValueOnce({
-        data: { id: "s2", name: "Negociação", type: "soft" },
-      });
-
-      render(
-        <EditProfileModal open onOpenChange={vi.fn()} profile={baseProfile} />,
-      );
-
-      await user.type(screen.getByLabelText(/adicionar habilidade/i), "neg");
-
-      const suggestions = await screen.findByRole("list", {
-        name: /sugestões de habilidades/i,
-      });
-      expect(get).toHaveBeenCalledWith(
-        "/skills",
-        expect.objectContaining({
-          params: expect.objectContaining({ search: "neg" }) as unknown,
-        }),
-      );
-      // A skill already in the profile is not offered again.
-      expect(
-        within(suggestions).queryByRole("button", { name: "Liderança" }),
-      ).not.toBeInTheDocument();
+      expect(patch).not.toHaveBeenCalled();
+      expect(onOpenChange).not.toHaveBeenCalled();
 
       await user.click(
-        within(suggestions).getByRole("button", { name: "Negociação" }),
+        screen.getByRole("button", { name: /salvar alterações/i }),
       );
 
-      expect(
-        await screen.findByRole("button", {
-          name: /remover habilidade negociação/i,
-        }),
-      ).toBeVisible();
-      expect(post).toHaveBeenCalledWith("/professionals/me/skills", {
-        skill_id: "s2",
+      await screen.findByText("Perfil atualizado com sucesso.");
+      expect(put).toHaveBeenCalledTimes(2);
+      expect(put).toHaveBeenNthCalledWith(2, "/professionals/me/skills", {
+        skill_ids: ["s2"],
       });
-      expect(screen.getByLabelText(/adicionar habilidade/i)).toHaveValue("");
-    });
-
-    it("adds the exact catalog match when Enter is pressed", async () => {
-      const user = userEvent.setup();
-      vi.spyOn(apiClient, "get").mockResolvedValue({
-        data: [
-          { id: "s2", name: "Negociação", type: "soft" },
-          { id: "s3", name: "Negociação avançada", type: "soft" },
-        ],
-      });
-      const post = vi.spyOn(apiClient, "post").mockResolvedValueOnce({
-        data: { id: "s2", name: "Negociação", type: "soft" },
-      });
-
-      render(
-        <EditProfileModal open onOpenChange={vi.fn()} profile={baseProfile} />,
-      );
-
-      const input = screen.getByLabelText(/adicionar habilidade/i);
-      await user.type(input, "negociacao");
-      await screen.findByRole("list", { name: /sugestões de habilidades/i });
-      await user.type(input, "{Enter}");
-
-      await waitFor(() =>
-        expect(post).toHaveBeenCalledWith("/professionals/me/skills", {
-          skill_id: "s2",
-        }),
-      );
-    });
-
-    it("does not add a skill the profile already has", async () => {
-      const user = userEvent.setup();
-      const post = vi.spyOn(apiClient, "post");
-      vi.spyOn(apiClient, "get").mockResolvedValue({ data: [] });
-
-      render(
-        <EditProfileModal open onOpenChange={vi.fn()} profile={baseProfile} />,
-      );
-
-      await user.type(
-        screen.getByLabelText(/adicionar habilidade/i),
-        "lideranca{Enter}",
-      );
-
-      expect(await screen.findByRole("alert")).toHaveTextContent(
-        "Esta habilidade já está no seu perfil.",
-      );
-      expect(post).not.toHaveBeenCalled();
-    });
-
-    it("says when the catalog has no matching skill", async () => {
-      const user = userEvent.setup();
-      vi.spyOn(apiClient, "get").mockResolvedValue({ data: [] });
-
-      render(
-        <EditProfileModal open onOpenChange={vi.fn()} profile={baseProfile} />,
-      );
-
-      await user.type(screen.getByLabelText(/adicionar habilidade/i), "xyz");
-
-      expect(
-        await screen.findByText("Nenhuma habilidade encontrada no catálogo."),
-      ).toBeVisible();
-    });
-
-    it("says when the catalog search fails", async () => {
-      const user = userEvent.setup();
-      vi.spyOn(apiClient, "get").mockRejectedValue(
-        new ApiError({ message: "Network Error" }),
-      );
-
-      render(
-        <EditProfileModal open onOpenChange={vi.fn()} profile={baseProfile} />,
-      );
-
-      await user.type(screen.getByLabelText(/adicionar habilidade/i), "xyz");
-
-      expect(
-        await screen.findByText(
-          "Não foi possível buscar as habilidades. Tente novamente.",
-        ),
-      ).toBeVisible();
+      expect(patch).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -451,9 +408,9 @@ describe("EditProfileModal", () => {
       screen.getByRole("button", { name: /salvar alterações/i }),
     );
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Perfil atualizado com sucesso.",
-    );
+    expect(
+      await screen.findByText("Perfil atualizado com sucesso."),
+    ).toHaveAttribute("role", "status");
   });
 
   it("replaces the cached profile with the saved one", async () => {
@@ -471,7 +428,7 @@ describe("EditProfileModal", () => {
       screen.getByRole("button", { name: /salvar alterações/i }),
     );
 
-    await screen.findByRole("status");
+    await screen.findByText("Perfil atualizado com sucesso.");
     expect(client.getQueryData(profileQueryKey)).toEqual(saved);
   });
 
@@ -702,12 +659,16 @@ describe("EditProfileModal", () => {
 
     it("downloads the document through a short-lived link", async () => {
       const user = userEvent.setup();
-      vi.spyOn(apiClient, "get").mockResolvedValueOnce({
-        data: {
-          url: "https://storage.example.invalid/cert-1?sig=1",
-          expires_at: "2026-10-13T12:05:00Z",
-        },
-      });
+      vi.spyOn(apiClient, "get").mockImplementation((url: string) =>
+        Promise.resolve({
+          data: url.endsWith("/document")
+            ? {
+                url: "https://storage.example.invalid/cert-1?sig=1",
+                expires_at: "2026-10-13T12:05:00Z",
+              }
+            : [],
+        }),
+      );
       render(
         <EditProfileModal
           open

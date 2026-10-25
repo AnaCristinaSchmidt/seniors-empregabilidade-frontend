@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "@/lib/api-client";
+import { ApiError } from "@/lib/api-error";
 
 import {
   addProfileSkill,
@@ -13,6 +14,8 @@ import {
   fetchProfessionalProfile,
   professionalProfileQueryKey,
   removeProfileSkill,
+  saveSkillSelection,
+  skillCatalogQueryOptions,
   searchSkillCatalog,
   updateCertificationById,
   uploadCertificationDocument,
@@ -27,6 +30,8 @@ vi.mock("@/lib/api-client", () => ({
     delete: vi.fn(),
   },
 }));
+
+afterEach(() => vi.resetAllMocks());
 
 const validProfile = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -85,6 +90,11 @@ describe("professionalProfileQueryKey", () => {
 });
 
 describe("skill catalog and profile skills", () => {
+  it("keeps catalog searches separate and retains their previous page", () => {
+    const options = skillCatalogQueryOptions("excel");
+    expect(options.queryKey).toEqual(["skills", "catalog", "excel"]);
+    expect(options.placeholderData).toBeDefined();
+  });
   it("searches the catalog with the typed text", async () => {
     const skills = [{ id: "s2", name: "Negociação", type: "soft" }];
     const get = vi.spyOn(apiClient, "get").mockResolvedValueOnce({
@@ -93,7 +103,7 @@ describe("skill catalog and profile skills", () => {
 
     await expect(searchSkillCatalog("neg")).resolves.toEqual(skills);
     expect(get).toHaveBeenCalledWith("/skills", {
-      params: { search: "neg", limit: 8 },
+      params: { search: "neg", limit: 20 },
     });
   });
 
@@ -131,6 +141,49 @@ describe("skill catalog and profile skills", () => {
     await removeProfileSkill("s2");
 
     expect(remove).toHaveBeenCalledWith("/professionals/me/skills/s2");
+  });
+});
+
+describe("bulk skill selection", () => {
+  const skill = { id: "s1", name: "Liderança", type: "soft" as const };
+
+  it("replaces the entire selection with one request", async () => {
+    const post = vi.spyOn(apiClient, "post");
+    const remove = vi.spyOn(apiClient, "delete");
+    const put = vi
+      .spyOn(apiClient, "put")
+      .mockResolvedValueOnce({ data: [skill] });
+    await expect(saveSkillSelection([skill])).resolves.toEqual([skill]);
+    expect(put).toHaveBeenCalledExactlyOnceWith("/professionals/me/skills", {
+      skill_ids: ["s1"],
+    });
+    expect(post).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("can clear all selected skills", async () => {
+    const put = vi.spyOn(apiClient, "put").mockResolvedValueOnce({ data: [] });
+    await expect(saveSkillSelection([])).resolves.toEqual([]);
+    expect(put).toHaveBeenCalledWith("/professionals/me/skills", {
+      skill_ids: [],
+    });
+  });
+
+  it("rejects an invalid saved selection response", async () => {
+    vi.spyOn(apiClient, "put").mockResolvedValueOnce({ data: ["Liderança"] });
+    await expect(saveSkillSelection([skill])).rejects.toMatchObject({
+      code: "invalid_skill_response",
+    });
+  });
+
+  it("preserves the backend failure for the editor to handle", async () => {
+    const failure = new ApiError({
+      message: "Not found",
+      code: "skill_not_found",
+      status: 404,
+    });
+    vi.spyOn(apiClient, "put").mockRejectedValueOnce(failure);
+    await expect(saveSkillSelection([skill])).rejects.toBe(failure);
   });
 });
 
