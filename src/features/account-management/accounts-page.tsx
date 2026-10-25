@@ -42,7 +42,7 @@ import {
 } from "./accounts-api";
 
 const selectClassName =
-  "h-12 w-full rounded-md border-[1.5px] border-input bg-background px-3.5 text-lg text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+  "h-12 w-full min-w-0 rounded-md border-[1.5px] border-input bg-background px-3.5 text-lg text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export function AccountsPage() {
   const [filters, setFilters] = useState<AccountFilters>(defaultAccountFilters);
@@ -54,6 +54,7 @@ export function AccountsPage() {
   const userTypeId = useId();
   const accountStatusId = useId();
   const companyStatusId = useId();
+  const completenessId = useId();
 
   function changeFilter<K extends keyof AccountFilters>(
     key: K,
@@ -63,12 +64,15 @@ export function AccountsPage() {
   }
 
   const rangeStart = page && page.items.length > 0 ? filters.offset + 1 : 0;
-  const rangeEnd = page ? filters.offset + page.items.length : 0;
+  const rangeEnd =
+    page && page.items.length > 0 ? filters.offset + page.items.length : 0;
   const hasPrevious = filters.offset > 0;
-  const hasNext = page ? rangeEnd < page.total : false;
+  const hasNext = page
+    ? filters.offset + page.items.length < page.total
+    : false;
 
   return (
-    <div className="min-h-full bg-muted p-4 md:p-8">
+    <div className="min-h-full bg-muted p-4 pb-24 md:p-8 md:pb-24">
       <div className="mb-6 flex flex-col gap-1">
         <h1 className="text-3xl font-bold text-foreground">Cadastros</h1>
         <p className="text-lg text-muted-foreground">
@@ -77,7 +81,7 @@ export function AccountsPage() {
         </p>
       </div>
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-3">
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="space-y-2">
           <Label htmlFor={userTypeId}>Tipo</Label>
           <select
@@ -135,10 +139,29 @@ export function AccountsPage() {
             <option value="blocked">Bloqueada</option>
           </select>
         </div>
+        <div className="space-y-2">
+          <Label htmlFor={completenessId}>Currículo do profissional</Label>
+          <select
+            id={completenessId}
+            className={selectClassName}
+            value={filters.completeness}
+            onChange={(event) =>
+              changeFilter(
+                "completeness",
+                event.target.value as AccountFilters["completeness"],
+              )
+            }
+          >
+            <option value="all">Todos</option>
+            <option value="complete">Completo</option>
+            <option value="incomplete">Incompleto</option>
+          </select>
+        </div>
       </div>
 
       <p className="mb-6 max-w-3xl text-base text-muted-foreground">
-        Os filtros se combinam. A situação da empresa lista só empresas.
+        Os filtros se combinam. A situação da empresa lista só empresas;
+        currículo lista só profissionais.
       </p>
 
       <div role="status">
@@ -172,11 +195,20 @@ export function AccountsPage() {
         </div>
       ) : page && page.items.length === 0 ? (
         <p className="rounded-lg border-[1.5px] border-border bg-background p-6 text-lg text-muted-foreground">
-          Nenhuma conta encontrada com esses filtros.
+          {filters.offset > 0
+            ? "Não há mais contas nesta página. Volte para a página anterior."
+            : "Nenhuma conta encontrada com esses filtros."}
         </p>
       ) : page ? (
         <div className="flex flex-col gap-4">
-          <div className="overflow-x-auto rounded-lg border-[1.5px] border-border bg-background">
+          <div
+            role="region"
+            aria-label="Tabela de cadastros"
+            // A focusable scroll region supports keyboard scrolling in Safari.
+            // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+            tabIndex={0}
+            className="overflow-x-auto rounded-lg border-[1.5px] border-border bg-background focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
             <table className="w-full min-w-[56rem] border-collapse text-left">
               <caption className="sr-only">
                 Contas de profissionais e empresas
@@ -189,7 +221,7 @@ export function AccountsPage() {
                     "Tipo",
                     "Status",
                     "Situação",
-                    "Perfil",
+                    "Currículo",
                     "Cadastro",
                     "Ação",
                   ].map((heading) => (
@@ -219,39 +251,40 @@ export function AccountsPage() {
               </tbody>
             </table>
           </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-base text-muted-foreground">
-              {rangeStart}–{rangeEnd} de {page.total}
-            </p>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!hasPrevious}
-                onClick={() =>
-                  setFilters((current) => ({
-                    ...current,
-                    offset: Math.max(0, current.offset - ACCOUNTS_PAGE_SIZE),
-                  }))
-                }
-              >
-                Anterior
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!hasNext}
-                onClick={() =>
-                  setFilters((current) => ({
-                    ...current,
-                    offset: current.offset + ACCOUNTS_PAGE_SIZE,
-                  }))
-                }
-              >
-                Próxima
-              </Button>
-            </div>
+        </div>
+      ) : null}
+      {page && !accounts.isError && (page.total > 0 || hasPrevious) ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-base text-muted-foreground">
+            {rangeStart}–{rangeEnd} de {page.total}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!hasPrevious}
+              onClick={() =>
+                setFilters((current) => ({
+                  ...current,
+                  offset: Math.max(0, current.offset - ACCOUNTS_PAGE_SIZE),
+                }))
+              }
+            >
+              Anterior
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!hasNext}
+              onClick={() =>
+                setFilters((current) => ({
+                  ...current,
+                  offset: current.offset + ACCOUNTS_PAGE_SIZE,
+                }))
+              }
+            >
+              Próxima
+            </Button>
           </div>
         </div>
       ) : null}
@@ -294,7 +327,7 @@ function AccountRow({
           : "—"}
       </td>
       <td className="px-4 py-3 text-base text-foreground">
-        {completionLabel(account.completion_percentage)}
+        {completionLabel(account.missing_fields)}
       </td>
       <td className="px-4 py-3 text-base text-foreground">{registered}</td>
       <td className="px-4 py-3">
@@ -369,7 +402,10 @@ function AccountDialog({
           </Button>
         }
       />
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent
+        className="sm:max-w-2xl"
+        showCloseButton={!mutation.isPending}
+      >
         <div className="flex max-h-[calc(100dvh-6rem)] min-h-0 flex-col gap-4">
           <DialogHeader className="shrink-0 pr-8">
             <div className="flex items-center gap-4">
@@ -388,7 +424,14 @@ function AccountDialog({
             </div>
           </DialogHeader>
 
-          <div className="min-h-0 overflow-y-auto">
+          <div
+            role="region"
+            aria-label="Dados do cadastro"
+            // A focusable scroll region supports keyboard scrolling in Safari.
+            // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+            tabIndex={0}
+            className="min-h-0 overflow-y-auto rounded-sm focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
             {detailQuery.isPending && !detail ? (
               <p className="text-lg text-muted-foreground">
                 Carregando cadastro…
@@ -420,6 +463,7 @@ function AccountDialog({
                 id={reasonId}
                 rows={3}
                 maxLength={REASON_MAX_LENGTH}
+                disabled={mutation.isPending}
                 aria-invalid={Boolean(problem)}
                 aria-describedby={problem ? errorId : undefined}
               />
@@ -626,10 +670,9 @@ function registrationLine(
         : count === 1
           ? "1 candidatura"
           : `${count} candidaturas`;
-    const profile =
-      account.completion_percentage === null
-        ? null
-        : `perfil ${account.completion_percentage}% completo`;
+    const profile = completionLabel(
+      detail?.missing_fields ?? account.missing_fields,
+    ).toLocaleLowerCase("pt-BR");
     return [when, applications, profile]
       .filter((part) => part !== null)
       .join(" · ");

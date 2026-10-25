@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -20,6 +20,7 @@ const candidate = {
   account_status: "active",
   company_status: null,
   completion_percentage: 70,
+  missing_fields: ["summary"],
   created_at: "2026-10-20T18:00:00Z",
 };
 const company = {
@@ -30,6 +31,7 @@ const company = {
   account_status: "blocked",
   company_status: "approved",
   completion_percentage: null,
+  missing_fields: null,
   created_at: "2026-10-19T18:00:00Z",
 };
 const suspended = {
@@ -104,6 +106,91 @@ function companyDetail(account: typeof company = company) {
 
 let stub: ApiStub | undefined;
 
+it("uses US-08 completeness instead of the stored percentage and resets the page when filtering", async () => {
+  const complete = {
+    ...candidate,
+    completion_percentage: 0,
+    missing_fields: [],
+  };
+  const user = mount({}, (request) => ({
+    status: 200,
+    data: request.url?.includes("completeness=complete")
+      ? { items: [complete], total: 1 }
+      : { items: [candidate], total: 21 },
+  }));
+  await shown("Pessoa Sintética");
+  expect(
+    row("Pessoa Sintética").getByText("Currículo incompleto"),
+  ).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Próxima" }));
+  await screen.findByText("21–21 de 21");
+  await user.selectOptions(
+    screen.getByLabelText("Currículo do profissional"),
+    "complete",
+  );
+  await screen.findByText("Currículo completo");
+  expect(screen.queryByText("0% completo")).not.toBeInTheDocument();
+  expect(stub?.requests.at(-1)?.url).toBe(
+    "/admin/accounts?completeness=complete&limit=20&offset=0",
+  );
+  expect(screen.getByRole("button", { name: "Anterior" })).toBeDisabled();
+});
+
+it("keeps the previous page reachable after the last active row is blocked", async () => {
+  let removed = false;
+  const firstRows = Array.from({ length: 20 }, (_, index) => ({
+    ...candidate,
+    id: "71000000-0000-4000-8000-" + String(index + 1).padStart(12, "0"),
+    display_name: "Synthetic professional " + (index + 1),
+  }));
+  const user = mount(
+    {
+      ["GET /admin/accounts/" + candidate.id]: {
+        status: 200,
+        data: candidateDetail(),
+      },
+      [statusRoute]: () => {
+        removed = true;
+        return {
+          status: 200,
+          data: { id: candidate.id, account_status: "blocked" },
+        };
+      },
+    },
+    (request) => ({
+      status: 200,
+      data: {
+        items: request.url?.includes("offset=20")
+          ? removed
+            ? []
+            : [candidate]
+          : firstRows,
+        total: removed ? 20 : 21,
+      },
+    }),
+  );
+  await shown("Synthetic professional 1");
+  await user.selectOptions(screen.getByLabelText("Status da conta"), "active");
+  await user.click(screen.getByRole("button", { name: "Próxima" }));
+  await shown("Pessoa Sintética");
+  await user.click(
+    screen.getByRole("button", { name: "Ver cadastro de Pessoa Sintética" }),
+  );
+  await user.type(
+    screen.getByLabelText("Justificativa"),
+    "Verificação sintética.",
+  );
+  await user.click(screen.getByRole("button", { name: "Bloquear" }));
+  await screen.findByText(
+    "Não há mais contas nesta página. Volte para a página anterior.",
+  );
+  expect(screen.getByRole("button", { name: "Anterior" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Próxima" })).toBeDisabled();
+  await user.click(screen.getByRole("button", { name: "Anterior" }));
+  await shown("Synthetic professional 1");
+  await waitFor(() => expect(screen.getByText("1–20 de 20")).toBeVisible());
+});
+
 afterEach(() => {
   stub?.restore();
   stub = undefined;
@@ -150,7 +237,9 @@ describe("AccountsPage", () => {
     await shown("Pessoa Sintética");
     await shown("Empresa Sintética");
     expect(row("Pessoa Sintética").getByText("Ativa")).toBeVisible();
-    expect(row("Pessoa Sintética").getByText("70% completo")).toBeVisible();
+    expect(
+      row("Pessoa Sintética").getByText("Currículo incompleto"),
+    ).toBeVisible();
     expect(row("Pessoa Sintética").getByText("Profissional")).toBeVisible();
     expect(row("Empresa Sintética").getByText("Bloqueada")).toBeVisible();
     expect(row("Empresa Sintética").getByText("Aprovada")).toBeVisible();

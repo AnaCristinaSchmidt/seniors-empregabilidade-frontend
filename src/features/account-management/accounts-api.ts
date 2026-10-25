@@ -26,6 +26,7 @@ const accountSummarySchema = z.object({
   account_status: accountStatusSchema,
   company_status: companyStatusSchema.nullable(),
   completion_percentage: z.number().int().nullable(),
+  missing_fields: z.array(z.string()).nullable(),
   created_at: z.iso.datetime({ offset: true }),
 });
 
@@ -92,8 +93,7 @@ export interface AccountFilters {
   userType: "all" | UserTypeFilter;
   accountStatus: "all" | AccountStatus;
   companyStatus: "all" | CompanyStatus;
-  minCompletion: string;
-  maxCompletion: string;
+  completeness: "all" | "complete" | "incomplete";
   offset: number;
 }
 
@@ -101,12 +101,9 @@ export const defaultAccountFilters: AccountFilters = {
   userType: "all",
   accountStatus: "all",
   companyStatus: "all",
-  minCompletion: "",
-  maxCompletion: "",
+  completeness: "all",
   offset: 0,
 };
-
-const completionBound = /^(100|[1-9]?\d)$/;
 
 export const userTypeLabels: Record<UserTypeFilter, string> = {
   candidate: "Profissional",
@@ -131,23 +128,13 @@ export function accountDisplayName(account: AccountSummary): string {
   return name ? name : account.email;
 }
 
-export function completionLabel(percentage: number | null): string {
-  return percentage === null ? "—" : `${percentage}% completo`;
-}
-
-export function accountFiltersError(filters: AccountFilters): string | null {
-  const min = filters.minCompletion.trim();
-  const max = filters.maxCompletion.trim();
-  if (
-    (min !== "" && !completionBound.test(min)) ||
-    (max !== "" && !completionBound.test(max))
-  ) {
-    return "Informe a conclusão com um número de 0 a 100.";
-  }
-  if (min !== "" && max !== "" && Number(min) > Number(max)) {
-    return "A conclusão mínima não pode ser maior que a máxima.";
-  }
-  return null;
+export function completionLabel(
+  missingFields: readonly string[] | null,
+): string {
+  if (missingFields === null) return "—";
+  return missingFields.length === 0
+    ? "Currículo completo"
+    : "Currículo incompleto";
 }
 
 export function accountsSearchParams(filters: AccountFilters): string {
@@ -159,11 +146,8 @@ export function accountsSearchParams(filters: AccountFilters): string {
   if (filters.companyStatus !== "all") {
     params.set("company_status", filters.companyStatus);
   }
-  if (filters.minCompletion.trim() !== "") {
-    params.set("min_completion", filters.minCompletion.trim());
-  }
-  if (filters.maxCompletion.trim() !== "") {
-    params.set("max_completion", filters.maxCompletion.trim());
+  if (filters.completeness !== "all") {
+    params.set("completeness", filters.completeness);
   }
   params.set("limit", String(ACCOUNTS_PAGE_SIZE));
   params.set("offset", String(filters.offset));
@@ -220,7 +204,6 @@ export function accountsQueryOptions(filters: AccountFilters) {
   return queryOptions({
     queryKey: [...accountsQueryKey, filters],
     queryFn: ({ signal }) => fetchAccounts(filters, signal),
-    enabled: accountFiltersError(filters) === null,
     retry: false,
   });
 }

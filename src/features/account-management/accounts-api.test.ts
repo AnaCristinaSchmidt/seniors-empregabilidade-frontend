@@ -5,7 +5,6 @@ import { ApiError } from "@/lib/api-error";
 import { stubApiRoutes, type ApiStub } from "../../../tests/api-stub";
 
 import {
-  accountFiltersError,
   accountStatusValuesSchema,
   accountsErrorMessage,
   accountsSearchParams,
@@ -24,6 +23,7 @@ const candidate = {
   account_status: "active",
   company_status: null,
   completion_percentage: 70,
+  missing_fields: ["summary"],
   created_at: "2026-10-20T15:00:00Z",
 };
 
@@ -41,28 +41,12 @@ describe("account filters", () => {
         ...defaultAccountFilters,
         userType: "candidate",
         accountStatus: "blocked",
-        companyStatus: "pending",
-        minCompletion: "10",
-        maxCompletion: " 80 ",
+        completeness: "incomplete",
         offset: 20,
       }),
     ).toBe(
-      "user_type=candidate&account_status=blocked&company_status=pending&min_completion=10&max_completion=80&limit=20&offset=20",
+      "user_type=candidate&account_status=blocked&completeness=incomplete&limit=20&offset=20",
     );
-  });
-
-  it("rejects a completion bound outside 0 to 100 and an inverted range", () => {
-    expect(
-      accountFiltersError({ ...defaultAccountFilters, minCompletion: "101" }),
-    ).toBe("Informe a conclusão com um número de 0 a 100.");
-    expect(
-      accountFiltersError({
-        ...defaultAccountFilters,
-        minCompletion: "80",
-        maxCompletion: "10",
-      }),
-    ).toBe("A conclusão mínima não pode ser maior que a máxima.");
-    expect(accountFiltersError(defaultAccountFilters)).toBeNull();
   });
 
   it("requires a justification of at most 500 characters", () => {

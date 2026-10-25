@@ -15,7 +15,7 @@ export function RoleShell({ userType, children }: RoleShellProps) {
     <div className="flex min-h-svh flex-col bg-background sm:flex-row">
       <Sidebar userType={userType} />
 
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         {userType === "candidate" ? <RoleHeader /> : null}
         <main className="flex-1">{children}</main>
       </div>
