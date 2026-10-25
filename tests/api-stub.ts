@@ -43,10 +43,14 @@ export function stubApi(status: number, data: unknown): ApiStub {
  * request pending. A call without a route fails with 404, so a missing stub
  * shows up as a failure instead of a hang.
  */
-export function stubApiRoutes(routes: Record<string, StubRoute>): ApiStub {
+export function stubApiRoutes(
+  routes: Record<string, StubRoute>,
+  fallback?: StubRoute,
+): ApiStub {
   return installAdapter((request) => {
     const route =
-      routes[`${request.method?.toUpperCase() ?? ""} ${request.url ?? ""}`];
+      routes[`${request.method?.toUpperCase() ?? ""} ${request.url ?? ""}`] ??
+      fallback;
     if (route === undefined)
       return {
         status: 404,
