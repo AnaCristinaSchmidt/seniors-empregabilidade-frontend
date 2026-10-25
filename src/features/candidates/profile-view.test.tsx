@@ -316,7 +316,7 @@ describe("ProfileView - automatic application", () => {
     expect(toggle()).not.toBeChecked();
     expect(screen.getByText("Desligadas")).toBeVisible();
     expect(toggle()).toHaveAccessibleDescription(
-      /candidata você automaticamente às vagas com alta compatibilidade/,
+      /candidata você automaticamente às vagas com alta compatibilidade.*Vem ligado por padrão/,
     );
 
     await user.click(toggle());

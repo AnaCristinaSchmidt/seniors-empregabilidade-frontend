@@ -77,7 +77,8 @@ export function AutomaticApplicationSection({ enabled }: { enabled: boolean }) {
       </label>
       <p id={DESCRIPTION_ID} className="mt-3 text-lg text-foreground-2">
         O sistema candidata você automaticamente às vagas com alta
-        compatibilidade com o seu perfil. Você pode desligar a qualquer momento.
+        compatibilidade com o seu perfil. Vem ligado por padrão e pode ser
+        desligado a qualquer momento.
       </p>
       <p role="status" className="mt-2 text-base text-foreground-2">
         {mutation.isPending ? "Salvando…" : announcement}
