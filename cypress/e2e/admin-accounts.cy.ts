@@ -96,7 +96,9 @@ function openAccounts(): void {
 }
 function openCandidate(): void {
   cy.get('button[aria-label="Ver cadastro de Pessoa Sintética"]').click();
-  cy.get('[role="dialog"]').should("be.visible");
+  cy.get('[role="dialog"]')
+    .should("be.visible")
+    .and("have.css", "opacity", "1");
 }
 
 describe("administrator account management", () => {
@@ -147,17 +149,22 @@ describe("administrator account management", () => {
       });
     });
     let attempts = 0;
+    let releaseFailure: () => void = () => undefined;
+    const failureGate = new Promise<void>((resolve) => {
+      releaseFailure = resolve;
+    });
     cy.intercept("PATCH", "**/admin/accounts/*/status", (request) => {
       attempts++;
       if (attempts === 1) {
-        request.reply({
-          delay: 1000,
-          statusCode: 503,
-          body: {
-            code: "synthetic_failure",
-            status: 503,
-            title: "Unavailable",
-          },
+        return failureGate.then(() => {
+          request.reply({
+            statusCode: 503,
+            body: {
+              code: "synthetic_failure",
+              status: 503,
+              title: "Unavailable",
+            },
+          });
         });
       } else {
         expect(request.body).to.deep.equal({
@@ -185,6 +192,7 @@ describe("administrator account management", () => {
     cy.get('[role="dialog"]')
       .contains("button", /^Fechar$/)
       .should("be.disabled");
+    cy.then(() => releaseFailure());
     cy.wait("@statusChange");
     cy.get('[role="dialog"] [role="alert"]').should(
       "contain.text",
@@ -196,6 +204,7 @@ describe("administrator account management", () => {
     );
     cy.get('[role="dialog"]')
       .contains("button", /^Bloquear$/)
+      .should("be.enabled")
       .click();
     cy.wait("@statusChange");
     cy.get('[role="dialog"]').should("not.exist");
