@@ -165,6 +165,55 @@ describe("ProfessionalRankingView", () => {
     ).toBeEnabled();
   });
 
+  it("filtra a lista por origem e informa as quantidades", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        ...PAYLOAD,
+        applicants: [
+          applicant("a-1", "Marcos Silveira", 100, 5, 5),
+          applicant(
+            "a-7",
+            "Paula Auto",
+            "60.00",
+            3,
+            5,
+            "Canoas",
+            "RS",
+            "automatic_match",
+          ),
+        ],
+      },
+    });
+    const user = userEvent.setup();
+
+    renderView();
+    await screen.findByText("Marcos Silveira");
+
+    await user.click(
+      screen.getByRole("button", { name: "Matches automáticos (1)" }),
+    );
+    expect(screen.getByText("Paula Auto")).toBeInTheDocument();
+    expect(screen.queryByText("Marcos Silveira")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Matches automáticos (1)" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(screen.getByRole("button", { name: "Candidaturas (1)" }));
+    expect(screen.getByText("Marcos Silveira")).toBeInTheDocument();
+    expect(screen.queryByText("Paula Auto")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Todos (2)" }));
+    expect(bodyRows()).toHaveLength(2);
+  });
+
+  it("não exibe contato nem dados sensíveis", async () => {
+    renderView();
+    await screen.findByText("Marcos Silveira");
+
+    expect(screen.queryByText(/@/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/telefone|e-mail|cpf/i)).not.toBeInTheDocument();
+  });
+
   it("chama o endpoint de candidaturas da vaga", async () => {
     renderView();
 

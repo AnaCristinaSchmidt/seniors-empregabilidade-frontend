@@ -1,8 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
+import { Sparkles, UserCheck } from "lucide-react";
+import { useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 import {
+  type ApplicantOrigin,
   HIGHLIGHT_THRESHOLD,
   jobApplicantsQueryOptions,
   sortByCompatibility,
@@ -22,6 +26,7 @@ export function ProfessionalRankingView({
   const { data, isPending, isError, refetch } = useQuery(
     jobApplicantsQueryOptions(jobId),
   );
+  const [originFilter, setOriginFilter] = useState<OriginFilter>("all");
 
   return (
     <section className="p-6 md:p-8">
@@ -39,10 +44,27 @@ export function ProfessionalRankingView({
       ) : isError ? (
         <RankingErrorState onRetry={() => void refetch()} />
       ) : (
-        <RankingTable
-          applicants={sortByCompatibility(data.applicants)}
-          onViewResume={onViewResume}
-        />
+        <>
+          <OriginFilterBar
+            value={originFilter}
+            onChange={setOriginFilter}
+            counts={{
+              all: data.applicants.length,
+              application: data.applicants.filter(
+                (item) => item.origin === "application",
+              ).length,
+              automatic_match: data.applicants.filter(
+                (item) => item.origin === "automatic_match",
+              ).length,
+            }}
+          />
+          <RankingTable
+            applicants={sortByCompatibility(data.applicants).filter(
+              (item) => originFilter === "all" || item.origin === originFilter,
+            )}
+            onViewResume={onViewResume}
+          />
+        </>
       )}
     </section>
   );
@@ -100,6 +122,59 @@ function RankingTable({
   );
 }
 
+// Texto e ícone distinguem a origem; a cor é só reforço.
+function OriginBadge({ origin }: { origin: ApplicantOrigin }) {
+  return origin === "application" ? (
+    <Badge variant="outline" className="mt-1">
+      <UserCheck />
+      Candidatou-se à vaga
+    </Badge>
+  ) : (
+    <Badge variant="secondary" className="mt-1">
+      <Sparkles />
+      Match automático
+    </Badge>
+  );
+}
+
+type OriginFilter = "all" | ApplicantOrigin;
+
+function OriginFilterBar({
+  value,
+  onChange,
+  counts,
+}: {
+  value: OriginFilter;
+  onChange: (value: OriginFilter) => void;
+  counts: Record<OriginFilter, number>;
+}) {
+  const options: { value: OriginFilter; label: string }[] = [
+    { value: "all", label: "Todos" },
+    { value: "application", label: "Candidaturas" },
+    { value: "automatic_match", label: "Matches automáticos" },
+  ];
+
+  return (
+    <div
+      role="group"
+      aria-label="Filtrar por origem"
+      className="mb-4 flex flex-wrap gap-2"
+    >
+      {options.map((option) => (
+        <Button
+          key={option.value}
+          type="button"
+          variant={value === option.value ? "default" : "outline"}
+          aria-pressed={value === option.value}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label} ({counts[option.value]})
+        </Button>
+      ))}
+    </div>
+  );
+}
+
 function formatPercentage(value: number): string {
   return `${Number.isInteger(value) ? value : value.toFixed(2).replace(".", ",")}%`;
 }
@@ -132,11 +207,7 @@ function RankingRow({
         {location ? (
           <p className="text-base text-foreground-2">{location}</p>
         ) : null}
-        <p className="text-base text-muted-foreground">
-          {applicant.origin === "application"
-            ? "Candidatou-se à vaga"
-            : "Match automático"}
-        </p>
+        <OriginBadge origin={applicant.origin} />
       </td>
       <td className="px-3 py-4">
         {percentage === null ? (
