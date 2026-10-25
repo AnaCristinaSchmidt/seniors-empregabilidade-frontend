@@ -59,4 +59,21 @@ describe("RoleShell", () => {
     expect(screen.getByText("Administração")).toBeVisible();
     expect(screen.queryByText("Olá!")).not.toBeInTheDocument();
   });
+
+  it("shows the header with the route's action for the company area", () => {
+    render(
+      <RoleShell
+        userType="company"
+        headerAction={<a href="/empresa/notificacoes">Notificações</a>}
+      >
+        <p>Conteúdo da página</p>
+      </RoleShell>,
+    );
+
+    expect(screen.getByText("Olá!")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Notificações" })).toHaveAttribute(
+      "href",
+      "/empresa/notificacoes",
+    );
+  });
 });

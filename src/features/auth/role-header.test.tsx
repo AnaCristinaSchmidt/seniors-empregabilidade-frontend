@@ -4,13 +4,19 @@ import { describe, expect, it } from "vitest";
 import { RoleHeader } from "./role-header";
 
 describe("RoleHeader", () => {
-  it("shows a greeting and the notifications indicator as static text", () => {
+  it("shows the greeting", () => {
     render(<RoleHeader />);
 
     expect(screen.getByText("Olá!")).toBeVisible();
-    expect(screen.getByText("Notificações")).toBeVisible();
+  });
+
+  it("renders the action supplied by the route", () => {
+    render(
+      <RoleHeader action={<button type="button">Ação do cabeçalho</button>} />,
+    );
+
     expect(
-      screen.queryByRole("button", { name: "Notificações" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Ação do cabeçalho" }),
+    ).toBeVisible();
   });
 });
