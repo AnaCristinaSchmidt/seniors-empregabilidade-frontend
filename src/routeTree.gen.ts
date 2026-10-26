@@ -21,6 +21,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AdministradorIndexRouteImport } from './routes/administrador.index'
 import { Route as AdministradorCandidatosRouteImport } from './routes/administrador.candidatos'
+import { Route as AdministradorContasRouteImport } from './routes/administrador.contas'
 import { Route as CandidatoIndexRouteImport } from './routes/candidato.index'
 import { Route as CandidatoCandidaturasRouteImport } from './routes/candidato.candidaturas'
 import { Route as CandidatoNotificacoesRouteImport } from './routes/candidato.notificacoes'
@@ -92,6 +93,11 @@ const AdministradorCandidatosRoute = AdministradorCandidatosRouteImport.update({
   path: '/candidatos',
   getParentRoute: () => AdministradorRoute,
 } as any)
+const AdministradorContasRoute = AdministradorContasRouteImport.update({
+  id: '/contas',
+  path: '/contas',
+  getParentRoute: () => AdministradorRoute,
+} as any)
 const CandidatoIndexRoute = CandidatoIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -156,6 +162,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/administrador/candidatos': typeof AdministradorCandidatosRoute
+  '/administrador/contas': typeof AdministradorContasRoute
   '/candidato/candidaturas': typeof CandidatoCandidaturasRoute
   '/candidato/notificacoes': typeof CandidatoNotificacoesRoute
   '/candidato/perfil': typeof CandidatoPerfilRoute
@@ -177,6 +184,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/administrador/candidatos': typeof AdministradorCandidatosRoute
+  '/administrador/contas': typeof AdministradorContasRoute
   '/candidato/candidaturas': typeof CandidatoCandidaturasRoute
   '/candidato/notificacoes': typeof CandidatoNotificacoesRoute
   '/candidato/perfil': typeof CandidatoPerfilRoute
@@ -202,6 +210,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/administrador/candidatos': typeof AdministradorCandidatosRoute
+  '/administrador/contas': typeof AdministradorContasRoute
   '/candidato/candidaturas': typeof CandidatoCandidaturasRoute
   '/candidato/notificacoes': typeof CandidatoNotificacoesRoute
   '/candidato/perfil': typeof CandidatoPerfilRoute
@@ -228,6 +237,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/administrador/candidatos'
+    | '/administrador/contas'
     | '/candidato/candidaturas'
     | '/candidato/notificacoes'
     | '/candidato/perfil'
@@ -249,6 +259,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/administrador/candidatos'
+    | '/administrador/contas'
     | '/candidato/candidaturas'
     | '/candidato/notificacoes'
     | '/candidato/perfil'
@@ -273,6 +284,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/administrador/candidatos'
+    | '/administrador/contas'
     | '/candidato/candidaturas'
     | '/candidato/notificacoes'
     | '/candidato/perfil'
@@ -386,6 +398,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdministradorCandidatosRouteImport
       parentRoute: typeof AdministradorRoute
     }
+    '/administrador/contas': {
+      id: '/administrador/contas'
+      path: '/contas'
+      fullPath: '/administrador/contas'
+      preLoaderRoute: typeof AdministradorContasRouteImport
+      parentRoute: typeof AdministradorRoute
+    }
     '/candidato/': {
       id: '/candidato/'
       path: '/'
@@ -461,11 +480,13 @@ declare module '@tanstack/react-router' {
 
 interface AdministradorRouteChildren {
   AdministradorCandidatosRoute: typeof AdministradorCandidatosRoute
+  AdministradorContasRoute: typeof AdministradorContasRoute
   AdministradorIndexRoute: typeof AdministradorIndexRoute
 }
 
 const AdministradorRouteChildren: AdministradorRouteChildren = {
   AdministradorCandidatosRoute: AdministradorCandidatosRoute,
+  AdministradorContasRoute: AdministradorContasRoute,
   AdministradorIndexRoute: AdministradorIndexRoute,
 }
 
