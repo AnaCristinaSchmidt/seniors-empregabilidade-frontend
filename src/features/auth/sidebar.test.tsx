@@ -127,14 +127,22 @@ describe("Sidebar", () => {
     });
   });
 
-  it("links Candidatos and keeps the other administrator items static", () => {
+  it("links administrator pages and keeps the remaining items static", () => {
     render(<Sidebar userType="administrator" />);
 
     expect(screen.getByRole("link", { name: "Candidatos" })).toHaveAttribute(
       "href",
       "/administrador/candidatos",
     );
-    ["Relatórios", "Empresas", "Capacitação"].forEach((label) => {
+    expect(screen.getByRole("link", { name: "Cadastros" })).toHaveAttribute(
+      "href",
+      "/administrador/contas",
+    );
+    expect(screen.getByRole("link", { name: "Relatórios" })).toHaveAttribute(
+      "href",
+      "/administrador",
+    );
+    ["Empresas", "Capacitação"].forEach((label) => {
       expect(screen.getByText(label)).toBeVisible();
       expect(
         screen.queryByRole("link", { name: label }),

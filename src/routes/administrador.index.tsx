@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { RoleHomePage } from "@/features/auth/role-home-page";
+import { DashboardPage } from "@/features/dashboard/dashboard-page";
 
 export const Route = createFileRoute("/administrador/")({
-  component: () => <RoleHomePage title="Área do administrador" />,
+  component: DashboardPage,
 });

@@ -43,7 +43,14 @@ export function JobVacancyDetailModal({
   ...summary
 }: JobVacancyDetailModalProps) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      onOpenChangeComplete={(isOpen) => {
+        // A scrolled popup can blur the trigger during its exit transition.
+        if (!isOpen) returnFocusRef?.current?.focus({ preventScroll: true });
+      }}
+    >
       <DialogContent
         showCloseButton={false}
         finalFocus={returnFocusRef}
