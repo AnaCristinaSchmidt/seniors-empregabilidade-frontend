@@ -26,7 +26,7 @@ function applicant(
   return {
     origin,
     application_id: automatic ? null : id,
-    status: automatic ? null : "submitted",
+    status: automatic ? null : "applied",
     match_score: null,
     compatibility_percentage: percentage,
     is_highlighted: percentage !== null && Number(percentage) >= 50,

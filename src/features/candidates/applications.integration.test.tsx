@@ -28,6 +28,7 @@ const closed: Application = {
   id: "10000000-0000-4000-8000-000000000002",
   job_id: "20000000-0000-4000-8000-000000000002",
   status: "not_selected",
+  reason: "Perfil não alinhado aos requisitos.",
   company_name: "Empresa Horizonte",
   similar_jobs: [
     {
@@ -289,6 +290,9 @@ describe("application API integration", () => {
       ).not.toBeInTheDocument(),
     );
     expect(filters).toContain("Horizonte");
+    expect(
+      screen.getByText("Motivo: Perfil não alinhado aos requisitos."),
+    ).toBeVisible();
     await user.click(
       screen.getByRole("button", { name: "Ver vagas parecidas" }),
     );

@@ -1,7 +1,13 @@
 import { z } from "zod";
 
 import { apiClient } from "@/lib/api-client";
+import { applicationStatusSchema } from "@/lib/application-status";
 import { toApiError } from "@/lib/api-error";
+
+export {
+  applicationStatusSchema,
+  type ApplicationStatus,
+} from "@/lib/application-status";
 
 export const searchSchema = z.object({
   search: z
@@ -14,18 +20,6 @@ export const searchSchema = z.object({
 });
 
 export type SearchForm = z.infer<typeof searchSchema>;
-
-export const applicationStatusSchema = z.enum([
-  "applied",
-  "under_review",
-  "in_selection_process",
-  "hired",
-  "not_selected",
-  "withdrawn",
-  "expired",
-]);
-
-export type ApplicationStatus = z.infer<typeof applicationStatusSchema>;
 
 const similarJobSchema = z.object({
   id: z.string().uuid(),
@@ -41,6 +35,7 @@ export const applicationSchema = z.object({
   submitted_at: z.string().datetime({ offset: true }),
   days_in_process: z.number().int().nonnegative(),
   status: applicationStatusSchema,
+  reason: z.string().nullable().optional(),
   similar_jobs: z.array(similarJobSchema),
 });
 

@@ -290,6 +290,9 @@ function ApplicationCard({
 
             <div className="pt-2 text-base text-foreground">
               <p>{getApplicationDescription(application)}</p>
+              {application.status === "not_selected" && application.reason && (
+                <p className="mt-2">Motivo: {application.reason}</p>
+              )}
             </div>
 
             {application.status === "not_selected" &&
