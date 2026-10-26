@@ -56,14 +56,19 @@ beforeEach(() => {
   getMock.mockResolvedValue({ data: PAYLOAD });
 });
 
-function renderView() {
+function renderView(
+  onViewResume?: (applicant: { profile: { full_name: string } }) => void,
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <ProfessionalRankingView jobId="job-1" />
+      <ProfessionalRankingView
+        jobId="job-1"
+        {...(onViewResume ? { onViewResume } : {})}
+      />
     </QueryClientProvider>,
   );
 }
@@ -115,15 +120,76 @@ describe("ProfessionalRankingView", () => {
   });
 
   it("mantém perfis abaixo de 50% acessíveis", async () => {
-    renderView();
+    const onViewResume = vi.fn();
+    const user = userEvent.setup();
+    renderView(onViewResume);
 
     const row = (await screen.findByText("Antônio Ferraz")).closest(
       "tr",
     ) as HTMLElement;
+    await user.click(
+      within(row).getByRole("button", {
+        name: "Ver currículo de Antônio Ferraz",
+      }),
+    );
 
+    expect(onViewResume).toHaveBeenCalledOnce();
+    const [clicked] = onViewResume.mock.lastCall as [
+      { profile: { full_name: string } },
+    ];
+    expect(clicked.profile.full_name).toBe("Antônio Ferraz");
+  });
+
+  it("não mostra botão nem coluna de currículo sem uma ação", async () => {
+    renderView();
+
+    await screen.findByText("Marcos Silveira");
     expect(
-      within(row).getByRole("button", { name: /Ver currículo/ }),
-    ).toBeEnabled();
+      screen.queryByRole("button", { name: /Ver currículo/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("columnheader", { name: "Ações" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("nomeia as competências que formam o percentual", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        ...PAYLOAD,
+        applicants: [
+          {
+            ...applicant("a-2", "Camila Andrade Souza", "66.67", 2, 3),
+            matched_skills: [
+              { id: "s-1", name: "Excel" },
+              { id: "s-2", name: "Logística" },
+            ],
+            missing_skills: [{ id: "s-3", name: "Inglês" }],
+          },
+          {
+            ...applicant("a-1", "Marcos Silveira", 100, 3, 3),
+            matched_skills: [
+              { id: "s-1", name: "Excel" },
+              { id: "s-3", name: "Inglês" },
+              { id: "s-2", name: "Logística" },
+            ],
+            missing_skills: [],
+          },
+        ],
+      },
+    });
+    renderView();
+
+    const partial = (await screen.findByText("Camila Andrade Souza")).closest(
+      "tr",
+    ) as HTMLElement;
+    const full = screen
+      .getByText("Marcos Silveira")
+      .closest("tr") as HTMLElement;
+
+    expect(partial).toHaveTextContent("Atende: Excel, Logística");
+    expect(partial).toHaveTextContent("Falta: Inglês");
+    expect(full).toHaveTextContent("Atende: Excel, Inglês, Logística");
+    expect(within(full).queryByText(/Falta:/)).not.toBeInTheDocument();
   });
 
   it("mostra a origem e aceita match automático sem candidatura", async () => {
@@ -160,9 +226,6 @@ describe("ProfessionalRankingView", () => {
     expect(
       within(applied).getByText("Candidatou-se à vaga"),
     ).toBeInTheDocument();
-    expect(
-      within(auto).getByRole("button", { name: /Ver currículo/ }),
-    ).toBeEnabled();
   });
 
   it("chama o endpoint de candidaturas da vaga", async () => {

@@ -11,7 +11,10 @@ import {
 
 interface ProfessionalRankingViewProps {
   jobId: string;
-  /** Ação do botão "Ver currículo". Ligar ao perfil do candidato quando existir. */
+  /**
+   * Ação do botão "Ver currículo". Sem ela o botão não aparece: ainda não há
+   * endpoint que libere o currículo para a empresa.
+   */
   onViewResume?: (applicant: JobApplicant) => void;
 }
 
@@ -80,9 +83,13 @@ function RankingTable({
             <th scope="col" className="px-3 py-3">
               Requisitos atendidos
             </th>
-            <th scope="col" className="px-3 py-3">
-              <span className="sr-only">Ações</span>
-            </th>
+            {/* Sem ação de currículo ainda, a coluna some em vez de mostrar um
+                botão que não faz nada. */}
+            {onViewResume ? (
+              <th scope="col" className="px-3 py-3">
+                <span className="sr-only">Ações</span>
+              </th>
+            ) : null}
           </tr>
         </thead>
         <tbody>
@@ -98,6 +105,10 @@ function RankingTable({
       </table>
     </div>
   );
+}
+
+function skillNames(skills: JobApplicant["matched_skills"]): string {
+  return skills.map((skill) => skill.name).join(", ");
 }
 
 function formatPercentage(value: number): string {
@@ -164,23 +175,38 @@ function RankingRow({
         )}
       </td>
       <td className="px-3 py-4">
-        {/* O back só envia as contagens; nomes das competências: TODO(T02). */}
         <p className="text-base text-foreground">
           {applicant.matched_skill_count} de {applicant.required_skill_count}{" "}
           requisitos
         </p>
+        {/* Os critérios que formam o percentual (US-19). */}
+        {applicant.matched_skills.length > 0 ? (
+          <p className="mt-1 text-base text-foreground">
+            <span className="font-semibold">Atende:</span>{" "}
+            {skillNames(applicant.matched_skills)}
+          </p>
+        ) : null}
+        {applicant.missing_skills.length > 0 ? (
+          <p className="mt-1 text-base text-foreground-2">
+            <span className="font-semibold">Falta:</span>{" "}
+            {skillNames(applicant.missing_skills)}
+          </p>
+        ) : null}
       </td>
-      <td className="px-3 py-4">
-        {/* Disponível para todos, inclusive abaixo de 50%. */}
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => onViewResume?.(applicant)}
-        >
-          Ver currículo
-          <span className="sr-only"> de {profile.full_name}</span>
-        </Button>
-      </td>
+      {onViewResume ? (
+        <td className="px-3 py-4">
+          {/* Disponível para todos, inclusive abaixo de 50%. */}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onViewResume(applicant)}
+          >
+            {/* Space outside the span, or the name reads "currículode". */}
+            Ver currículo{" "}
+            <span className="sr-only">de {profile.full_name}</span>
+          </Button>
+        </td>
+      ) : null}
     </tr>
   );
 }

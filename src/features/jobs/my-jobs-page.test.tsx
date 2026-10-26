@@ -2,7 +2,8 @@ import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import type { ReactNode } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   stubApiRoutes,
@@ -12,6 +13,24 @@ import {
 } from "../../../tests/api-stub";
 
 import { MyJobsPage } from "./my-jobs-page";
+
+// The page renders outside a router here; the link only needs its target.
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    to,
+    params,
+    children,
+    ...props
+  }: {
+    to: string;
+    params: { jobId: string };
+    children: ReactNode;
+  }) => (
+    <a href={to.replace("$jobId", params.jobId)} {...props}>
+      {children}
+    </a>
+  ),
+}));
 
 const published = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -151,6 +170,19 @@ async function publishThroughTheModal(user: UserEvent) {
 const EMPTY_STATE = /Você ainda não publicou vagas/;
 
 describe("MyJobsPage", () => {
+  it("links each job to its professionals ranked by compatibility", async () => {
+    mount({ "GET /jobs/me": { status: 200, data: [listedPublished] } });
+
+    const card = within(
+      await screen.findByRole("article", { name: published.title }),
+    );
+    expect(
+      card.getByRole("link", {
+        name: `Ver candidatos da vaga ${published.title}`,
+      }),
+    ).toHaveAttribute("href", `/empresa/vagas/${published.id}/candidatos`);
+  });
+
   it("announces while the jobs load", () => {
     mount({ "GET /jobs/me": () => new Promise<StubResponse>(() => {}) });
 

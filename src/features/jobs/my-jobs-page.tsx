@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 
 import { formatIsoDate, workModeLabels } from "./job-labels";
 import { JobPostingModal } from "./job-posting-modal";
@@ -156,6 +157,19 @@ function JobCard({ job, onStatusChanged }: JobCardProps) {
           </li>
         ))}
       </ul>
+      {/* US-19: the ranked list of the job's professionals. */}
+      <Link
+        to="/empresa/vagas/$jobId/candidatos"
+        params={{ jobId: job.id }}
+        className={buttonVariants({
+          variant: "outline",
+          className: "self-start",
+        })}
+      >
+        {/* The space sits outside the span: a leading space inside it is
+            dropped from the accessible name ("candidatosda"). */}
+        Ver candidatos <span className="sr-only">da vaga {job.title}</span>
+      </Link>
       <JobStatusActions job={job} onChanged={onStatusChanged} />
     </article>
   );

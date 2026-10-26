@@ -22,6 +22,13 @@ const applicantProfileSchema = z.object({
   state: z.string().nullable(),
 });
 
+// Competências da vaga que o currículo tem (matched) ou não tem (missing),
+// ordenadas por nome pelo back. Vazias quando a vaga não tem requisitos.
+const compatibilitySkillSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+
 // application: o profissional se candidatou. automatic_match: perfil compatível
 // (50% ou mais) que não se candidatou. A origem não altera o percentual.
 export const applicantOriginSchema = z.enum(["application", "automatic_match"]);
@@ -37,6 +44,9 @@ export const jobApplicantSchema = z.object({
   is_highlighted: z.boolean(),
   matched_skill_count: z.number().int(),
   required_skill_count: z.number().int(),
+  // Default vazio enquanto um back sem os nomes (anterior ao #55) estiver no ar.
+  matched_skills: z.array(compatibilitySkillSchema).default([]),
+  missing_skills: z.array(compatibilitySkillSchema).default([]),
   profile: applicantProfileSchema,
 });
 
