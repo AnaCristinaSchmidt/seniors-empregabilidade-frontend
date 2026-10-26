@@ -9,6 +9,7 @@ import {
   type ApiStub,
   type StubRoute,
 } from "../../../tests/api-stub";
+import { type DownloadStub, stubDownloads } from "../../../tests/download-stub";
 
 import { AccountsPage } from "./accounts-page";
 
@@ -105,6 +106,7 @@ function companyDetail(account: typeof company = company) {
 }
 
 let stub: ApiStub | undefined;
+let downloads: DownloadStub | undefined;
 
 it("uses US-08 completeness instead of the stored percentage and resets the page when filtering", async () => {
   const complete = {
@@ -194,6 +196,8 @@ it("keeps the previous page reachable after the last active row is blocked", asy
 afterEach(() => {
   stub?.restore();
   stub = undefined;
+  downloads?.restore();
+  downloads = undefined;
 });
 
 function mount(routes: Record<string, StubRoute>, fallback?: StubRoute) {
@@ -406,6 +410,35 @@ describe("AccountsPage", () => {
     expect(
       screen.queryByRole("button", { name: "Desbloquear" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("exports every account matching the filters, whatever the page shown", async () => {
+    downloads = stubDownloads();
+    const user = mount(
+      {
+        "GET /admin/accounts/export?user_type=company&account_status=blocked": {
+          status: 200,
+          data: new Blob(["Nome\r\n"]),
+        },
+      },
+      () => ({ status: 200, data: { items: [company], total: 21 } }),
+    );
+    await shown("Empresa Sintética");
+    await user.selectOptions(screen.getByLabelText("Tipo"), "company");
+    await user.selectOptions(
+      screen.getByLabelText("Status da conta"),
+      "blocked",
+    );
+    await user.click(screen.getByRole("button", { name: "Próxima" }));
+    await screen.findByText("21–21 de 21");
+
+    await user.click(screen.getByRole("button", { name: "Exportar dados" }));
+
+    expect(await screen.findByText("Arquivo CSV exportado.")).toBeVisible();
+    expect(stub?.requests.at(-1)?.url).toBe(
+      "/admin/accounts/export?user_type=company&account_status=blocked",
+    );
+    expect(downloads.saved).toEqual(["cadastros.csv"]);
   });
 
   it("sends the combined filters and pages through the total", async () => {

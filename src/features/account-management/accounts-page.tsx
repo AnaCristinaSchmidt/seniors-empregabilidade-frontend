@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
 
+import { ExportDataButton } from "@/components/export-data-button";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,6 +37,7 @@ import {
   companyStatusLabels,
   completionLabel,
   defaultAccountFilters,
+  exportAccounts,
   REASON_MAX_LENGTH,
   statusChangeErrorMessage,
   userTypeLabels,
@@ -73,12 +75,15 @@ export function AccountsPage() {
 
   return (
     <div className="min-h-full bg-muted p-4 pb-24 md:p-8 md:pb-24">
-      <div className="mb-6 flex flex-col gap-1">
-        <h1 className="text-3xl font-bold text-foreground">Cadastros</h1>
-        <p className="text-lg text-muted-foreground">
-          Consulte profissionais e empresas e bloqueie ou desbloqueie uma conta
-          com justificativa.
-        </p>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h1 className="text-3xl font-bold text-foreground">Cadastros</h1>
+          <p className="text-lg text-muted-foreground">
+            Consulte profissionais e empresas e bloqueie ou desbloqueie uma
+            conta com justificativa.
+          </p>
+        </div>
+        <ExportDataButton onExport={() => exportAccounts(filters)} />
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

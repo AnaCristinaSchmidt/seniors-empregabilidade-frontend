@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { apiClient } from "@/lib/api-client";
 import { ApiError } from "@/lib/api-error";
+import { type DownloadedFile, fetchFile } from "@/lib/download-file";
 
 const ACCOUNTS_ENDPOINT = "/admin/accounts";
 
@@ -137,7 +138,7 @@ export function completionLabel(
     : "Currículo incompleto";
 }
 
-export function accountsSearchParams(filters: AccountFilters): string {
+function accountFilterParams(filters: AccountFilters): URLSearchParams {
   const params = new URLSearchParams();
   if (filters.userType !== "all") params.set("user_type", filters.userType);
   if (filters.accountStatus !== "all") {
@@ -149,9 +150,25 @@ export function accountsSearchParams(filters: AccountFilters): string {
   if (filters.completeness !== "all") {
     params.set("completeness", filters.completeness);
   }
+  return params;
+}
+
+export function accountsSearchParams(filters: AccountFilters): string {
+  const params = accountFilterParams(filters);
   params.set("limit", String(ACCOUNTS_PAGE_SIZE));
   params.set("offset", String(filters.offset));
   return params.toString();
+}
+
+/** Every account matching the filters as CSV; the page position is ignored. */
+export function exportAccounts(
+  filters: AccountFilters,
+): Promise<DownloadedFile> {
+  const search = accountFilterParams(filters).toString();
+  return fetchFile(
+    `${ACCOUNTS_ENDPOINT}/export${search ? `?${search}` : ""}`,
+    "cadastros.csv",
+  );
 }
 
 export async function fetchAccounts(

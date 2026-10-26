@@ -23,6 +23,8 @@ export interface ApiStub {
 export interface StubResponse {
   status: number;
   data?: unknown;
+  /** Response headers, lower-case, such as `content-disposition`. */
+  headers?: Record<string, string>;
 }
 
 export type StubRoute =
@@ -81,7 +83,7 @@ function installAdapter(
     };
     requests.push(request);
 
-    const { status, data } = await respond(request);
+    const { status, data, headers = {} } = await respond(request);
 
     if (status === 0) {
       throw Object.assign(new Error("stubbed network failure"), {
@@ -95,7 +97,7 @@ function installAdapter(
       data,
       status,
       statusText: "",
-      headers: {},
+      headers,
       config,
     } as AxiosResponse;
 

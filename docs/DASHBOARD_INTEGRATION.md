@@ -61,5 +61,6 @@ is already integrated into main; this branch includes those US-23 changes and
 targets main directly. The shared backend completeness helper is identical to
 #57, avoiding incompatible calculations.
 
-No new dependency or schema migration is required. US-25 CSV exports, production
-Cognito validation and final human acceptance remain separate work.
+No new dependency or schema migration is required. The "Exportar dados" CSV
+action is described in [DATA_EXPORT.md](DATA_EXPORT.md). Production Cognito
+validation and final human acceptance remain separate work.

@@ -8,6 +8,7 @@ import {
   type StubRoute,
   stubApiRoutes,
 } from "../../../tests/api-stub";
+import { type DownloadStub, stubDownloads } from "../../../tests/download-stub";
 import { DashboardPage } from "./dashboard-page";
 
 const summary = {
@@ -29,7 +30,12 @@ const summary = {
 };
 const base = "GET /indicators";
 let stub: ApiStub | undefined;
-afterEach(() => stub?.restore());
+let downloads: DownloadStub | undefined;
+afterEach(() => {
+  stub?.restore();
+  downloads?.restore();
+  downloads = undefined;
+});
 
 function mount(routes: Record<string, StubRoute>) {
   stub = stubApiRoutes(routes);
@@ -182,4 +188,32 @@ it("rejects a malformed successful response instead of rendering invalid totals"
   expect(
     screen.queryByText("Matches", { selector: "dt" }),
   ).not.toBeInTheDocument();
+});
+
+it("exports the applied filters, never an unapplied draft", async () => {
+  const { saved } = (downloads = stubDownloads());
+  const csv = { status: 200, data: new Blob(["Item;Valor\r\n"]) };
+  const { user } = mount({
+    [base]: { status: 200, data: summary },
+    "GET /indicators?job_status=published": { status: 200, data: summary },
+    "GET /indicators/export": csv,
+    "GET /indicators/export?job_status=published": csv,
+  });
+  await screen.findByText("Matches", { selector: "dt" });
+  const exportButton = screen.getByRole("button", { name: "Exportar dados" });
+
+  await user.selectOptions(
+    screen.getByLabelText("Status das vagas"),
+    "published",
+  );
+  await user.click(exportButton);
+  await screen.findByText("Arquivo CSV exportado.");
+  expect(stub?.requests.at(-1)?.url).toBe("/indicators/export");
+
+  await user.click(screen.getByRole("button", { name: "Aplicar filtros" }));
+  await user.click(exportButton);
+  await waitFor(() => expect(saved).toHaveLength(2));
+  expect(stub?.requests.at(-1)?.url).toBe(
+    "/indicators/export?job_status=published",
+  );
 });
