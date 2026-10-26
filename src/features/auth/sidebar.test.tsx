@@ -127,7 +127,7 @@ describe("Sidebar", () => {
     });
   });
 
-  it("links Cadastros and Candidatos and keeps the remaining administrator items static", () => {
+  it("links administrator pages and keeps the remaining items static", () => {
     render(<Sidebar userType="administrator" />);
 
     expect(screen.getByRole("link", { name: "Candidatos" })).toHaveAttribute(
@@ -138,7 +138,11 @@ describe("Sidebar", () => {
       "href",
       "/administrador/contas",
     );
-    ["Relatórios", "Empresas", "Capacitação"].forEach((label) => {
+    expect(screen.getByRole("link", { name: "Relatórios" })).toHaveAttribute(
+      "href",
+      "/administrador",
+    );
+    ["Empresas", "Capacitação"].forEach((label) => {
       expect(screen.getByText(label)).toBeVisible();
       expect(
         screen.queryByRole("link", { name: label }),

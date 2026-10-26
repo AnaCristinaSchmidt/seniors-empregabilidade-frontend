@@ -41,6 +41,10 @@ reference explicitly returns focus to the job button that opened it. Content scr
 within the viewport so long descriptions do not hide the footer. Interface
 copy is Brazilian Portuguese and uses the existing design tokens.
 
+The close-completion callback restores that focus again after the exit transition,
+because closing a scrolled popup can otherwise blur the trigger on narrow screens.
+It preserves the page's scroll position.
+
 ## Verification
 
 - API tests validate the real response shape, cancellation and error mapping.
