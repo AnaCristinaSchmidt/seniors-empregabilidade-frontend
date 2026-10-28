@@ -138,6 +138,10 @@ describe("Sidebar", () => {
       "href",
       "/administrador/contas",
     );
+    expect(screen.getByRole("link", { name: "Competências" })).toHaveAttribute(
+      "href",
+      "/administrador/competencias",
+    );
     expect(screen.getByRole("link", { name: "Relatórios" })).toHaveAttribute(
       "href",
       "/administrador",

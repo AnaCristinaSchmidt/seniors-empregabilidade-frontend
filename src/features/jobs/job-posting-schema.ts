@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { skillTypes } from "@/lib/skill-type";
+
 // Mirrors the backend catalog: a name is compared after its normalized form is
 // capped at 100 characters, and a job accepts at most 100 skills.
 export const MAX_SKILL_NAME_LENGTH = 100;
@@ -9,7 +11,6 @@ export const workModes = ["onsite", "hybrid", "remote"] as const;
 export const workModeSchema = z.enum(workModes);
 export type WorkMode = z.infer<typeof workModeSchema>;
 
-export const skillTypes = ["hard", "soft"] as const;
 export const skillTypeSchema = z.enum(skillTypes);
 export type SkillType = z.infer<typeof skillTypeSchema>;
 
