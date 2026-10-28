@@ -23,6 +23,8 @@ export interface ApiStub {
 export interface StubResponse {
   status: number;
   data?: unknown;
+  /** Response headers, lower-case, such as `content-disposition`. */
+  headers?: Record<string, string>;
 }
 
 export type StubRoute =
@@ -43,10 +45,14 @@ export function stubApi(status: number, data: unknown): ApiStub {
  * request pending. A call without a route fails with 404, so a missing stub
  * shows up as a failure instead of a hang.
  */
-export function stubApiRoutes(routes: Record<string, StubRoute>): ApiStub {
+export function stubApiRoutes(
+  routes: Record<string, StubRoute>,
+  fallback?: StubRoute,
+): ApiStub {
   return installAdapter((request) => {
     const route =
-      routes[`${request.method?.toUpperCase() ?? ""} ${request.url ?? ""}`];
+      routes[`${request.method?.toUpperCase() ?? ""} ${request.url ?? ""}`] ??
+      fallback;
     if (route === undefined)
       return {
         status: 404,
@@ -77,7 +83,7 @@ function installAdapter(
     };
     requests.push(request);
 
-    const { status, data } = await respond(request);
+    const { status, data, headers = {} } = await respond(request);
 
     if (status === 0) {
       throw Object.assign(new Error("stubbed network failure"), {
@@ -91,7 +97,7 @@ function installAdapter(
       data,
       status,
       statusText: "",
-      headers: {},
+      headers,
       config,
     } as AxiosResponse;
 

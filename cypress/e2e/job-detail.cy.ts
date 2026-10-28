@@ -160,6 +160,7 @@ describe("candidate job detail", () => {
     cy.checkA11y('[role="dialog"]', wcag);
     cy.screenshot("job-detail-mobile", { capture: "viewport" });
     cy.realPress("Escape");
+    cy.get('[role="dialog"]').should("not.exist");
     cy.contains("button", "Ver vaga").should("be.focused");
   });
 });

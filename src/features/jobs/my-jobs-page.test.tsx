@@ -1,3 +1,9 @@
+import {
+  createRootRoute,
+  createRouter,
+  createMemoryHistory,
+  RouterContextProvider,
+} from "@tanstack/react-router";
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -114,9 +120,15 @@ function mount(routes: Record<string, StubRoute>) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  const router = createRouter({
+    routeTree: createRootRoute({ component: MyJobsPage }),
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  });
   render(
     <QueryClientProvider client={queryClient}>
-      <MyJobsPage />
+      <RouterContextProvider router={router}>
+        <MyJobsPage />
+      </RouterContextProvider>
     </QueryClientProvider>,
   );
   return userEvent.setup();
