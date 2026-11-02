@@ -1,6 +1,12 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterContextProvider,
+} from "@tanstack/react-router";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -28,6 +34,7 @@ const closed: Application = {
   id: "10000000-0000-4000-8000-000000000002",
   job_id: "20000000-0000-4000-8000-000000000002",
   status: "not_selected",
+  reason: "Perfil não alinhado aos requisitos.",
   company_name: "Empresa Horizonte",
   similar_jobs: [
     {
@@ -67,9 +74,17 @@ function mount() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  const router = createRouter({
+    routeTree: createRootRoute(),
+    history: createMemoryHistory({
+      initialEntries: ["/candidato/candidaturas"],
+    }),
+  });
   render(
     <QueryClientProvider client={client}>
-      <ApplicationsPage />
+      <RouterContextProvider router={router}>
+        <ApplicationsPage />
+      </RouterContextProvider>
     </QueryClientProvider>,
   );
   return client;
@@ -289,6 +304,9 @@ describe("application API integration", () => {
       ).not.toBeInTheDocument(),
     );
     expect(filters).toContain("Horizonte");
+    expect(
+      screen.getByText("Motivo: Perfil não alinhado aos requisitos."),
+    ).toBeVisible();
     await user.click(
       screen.getByRole("button", { name: "Ver vagas parecidas" }),
     );

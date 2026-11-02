@@ -45,15 +45,30 @@ The close-completion callback restores that focus again after the exit transitio
 because closing a scrolled popup can otherwise blur the trigger on narrow screens.
 It preserves the page's scroll position.
 
+## Entry points
+
+Search opens this detail in a modal. The applications list links `Ver a vaga`
+to `/candidato/vagas/$jobId`, which renders the same detail outside the modal.
+Both paths call `GET /api/v1/jobs/{job_id}` directly.
+
+`already_applied`, `status`, `is_open`, `is_expired` and `is_applicable` come
+only from that response. The applications list is not cross-checked to decide
+whether the professional already applied or whether the job is open, closed or
+expired. A `409` from submission still refreshes the detail when the job
+changes between the read and the click.
+
 ## Verification
 
 - API tests validate the real response shape, cancellation and error mapping.
 - Component tests cover detail content, loading/retry, unavailable jobs,
   paused/closed/expired/already-applied states, submission, refresh and late results.
+- The applications link and the page cover an open job with an enabled action,
+  a closed or expired job that blocks applying, and an existing application.
 - `cypress/e2e/job-detail.cy.ts` covers keyboard opening and focus return,
   application and reopening, closed/expired states, narrow viewport reflow,
   and axe checks against the built frontend with synthetic HTTP responses.
+- `cypress/e2e/applications.cy.ts` covers opening the detail route from
+  `Ver a vaga`.
 - Run `pnpm validate:push` for the complete repository gates.
 
-These frontend checks stub HTTP at the transport boundary. US-11-T03 still
-requires validating the same scenarios against the running backend.
+These frontend checks stub HTTP at the transport boundary.

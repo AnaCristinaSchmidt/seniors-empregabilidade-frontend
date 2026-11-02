@@ -168,6 +168,36 @@ describe("administrator dashboard", () => {
     cy.checkA11y("main", wcag);
   });
 
+  it("downloads the applied filters as a CSV file", () => {
+    cy.intercept("GET", "**/indicators*", { body: summary });
+    cy.intercept("GET", "**/indicators/export*", {
+      body: "﻿Item;Valor\r\nStatus das vagas;Publicada\r\n",
+      headers: {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition":
+          'attachment; filename="relatorios-2026-10-26.csv"',
+      },
+    }).as("export");
+    signIn();
+    cy.get("#dashboard-job-status").select("published");
+    cy.contains("button", "Aplicar filtros").click();
+
+    cy.contains("button", "Exportar dados").click();
+
+    cy.wait("@export")
+      .its("request.url")
+      .should("match", /\/indicators\/export\?job_status=published$/);
+    cy.contains('[role="status"]', "Arquivo CSV exportado.").should(
+      "be.visible",
+    );
+    cy.contains("button", "Exportar dados").should("have.focus");
+    cy.readFile(
+      `${Cypress.config("downloadsFolder")}/relatorios-2026-10-26.csv`,
+    ).should("contain", "Status das vagas;Publicada");
+    cy.injectAxe();
+    cy.checkA11y("main", wcag);
+  });
+
   it("keeps the dashboard usable by keyboard and within narrow viewports", () => {
     cy.intercept("GET", "**/indicators*", { body: summary });
     signIn();

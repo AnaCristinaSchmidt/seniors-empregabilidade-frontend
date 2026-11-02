@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { ExportDataButton } from "@/components/export-data-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +10,7 @@ import {
   type DashboardFilters,
   dashboardQueryOptions,
   emptyDashboardFilters,
+  exportDashboard,
 } from "./dashboard-api";
 
 const selectClassName =
@@ -75,8 +77,8 @@ export function DashboardPage() {
   }
   return (
     <div className="min-h-full bg-muted p-4 pb-24 md:p-8 md:pb-24">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold text-foreground">
             Relatórios da plataforma
           </h1>
@@ -84,6 +86,8 @@ export function DashboardPage() {
             Acompanhe os cadastros, as oportunidades e as candidaturas.
           </p>
         </div>
+        {/* Exports the applied filters, never an unapplied draft. */}
+        <ExportDataButton onExport={() => exportDashboard(filters)} />
       </div>
       <form
         onSubmit={apply}

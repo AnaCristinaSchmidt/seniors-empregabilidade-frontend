@@ -1,6 +1,12 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterContextProvider,
+} from "@tanstack/react-router";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import React from "react";
 
@@ -65,8 +71,16 @@ const renderWithClient = (ui: React.ReactElement) => {
       },
     },
   });
+  const router = createRouter({
+    routeTree: createRootRoute(),
+    history: createMemoryHistory({
+      initialEntries: ["/candidato/candidaturas"],
+    }),
+  });
   return render(
-    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
+    <QueryClientProvider client={queryClient}>
+      <RouterContextProvider router={router}>{ui}</RouterContextProvider>
+    </QueryClientProvider>,
   );
 };
 
@@ -196,6 +210,9 @@ describe("ApplicationsPage", () => {
       ).not.toBeInTheDocument();
       expect(
         within(card).queryAllByRole("button", { name: "Sair do processo" }),
+      ).toHaveLength(withdrawButtons);
+      expect(
+        within(card).queryAllByRole("link", { name: /Ver a vaga/ }),
       ).toHaveLength(withdrawButtons);
     },
   );
@@ -524,5 +541,26 @@ describe("ApplicationsPage", () => {
     });
     expect(within(card).getByText("Gerente de Projetos")).toBeVisible();
     expect(within(card).getByText("TechCorp")).toBeVisible();
+  });
+
+  it("links Ver a vaga to the job detail route while the application is active", async () => {
+    renderWithClient(<ApplicationsPage />);
+
+    const active = await screen.findByRole("article", {
+      name: "Analista Administrativo · LogiBrás",
+    });
+    expect(
+      within(active).getByRole("link", { name: /Ver a vaga/ }),
+    ).toHaveAttribute(
+      "href",
+      "/candidato/vagas/22222222-2222-4222-8222-222222222222",
+    );
+
+    const rejected = screen.getByRole("article", {
+      name: "Coordenador de Projetos · Vitalis",
+    });
+    expect(
+      within(rejected).queryByRole("link", { name: /Ver a vaga/ }),
+    ).not.toBeInTheDocument();
   });
 });

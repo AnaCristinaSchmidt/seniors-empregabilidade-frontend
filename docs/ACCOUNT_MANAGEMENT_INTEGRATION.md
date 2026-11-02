@@ -12,6 +12,7 @@ role and current account status.
 - `GET /api/v1/admin/accounts`: combined filters and pagination.
 - `GET /api/v1/admin/accounts/{id}`: candidate or company details.
 - `PATCH /api/v1/admin/accounts/{id}/status`: block/reactivate with a required reason.
+- `GET /api/v1/admin/accounts/export`: CSV of the filtered list; see [DATA_EXPORT.md](DATA_EXPORT.md).
 
 Deploy the accompanying backend completeness changes before this frontend.
 The list and detail both require `missing_fields`: an empty array is complete,

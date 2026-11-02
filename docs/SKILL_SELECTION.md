@@ -28,6 +28,15 @@ treat absence from the first catalog page as proof that an item was removed.
 If a connection fails after the backend commits, the client may not know that
 the skills were saved; retrying the replacement request is safe.
 
+## Inactive catalog skills
+
+An administrator can inactivate a catalog skill (`docs/SKILL_CATALOG_ADMIN.md`).
+The search no longer finds it, but a résumé that already has it keeps the chip,
+and the PUT may send it again, so saving other changes does not drop it. It still
+counts towards the compatibility of the jobs that require it. Once removed, it
+can be selected again only after reactivation. A skill inactivated while it is
+in the local draft makes the PUT answer `skill_not_found`, handled as above.
+
 ## Closing and keyboard behavior
 
 Cancel, Escape, the close button, and outside interaction ask for confirmation
@@ -46,6 +55,8 @@ confirmation.
 
 Component tests cover the close paths, focus, the selection limit, a failed
 skills PUT, a successful PUT followed by a failed profile PATCH, and retries.
+`cypress/e2e/skill-catalog-flow.cy.ts` covers an inactivated skill on the
+profile, in the search and in the company's compatibility.
 `cypress/e2e/profile-skills.cy.ts` covers the browser save/discard flows,
 keyboard behavior, mobile failure visibility, and axe checks using intercepted
 synthetic API responses. These checks do not substitute for a human test with

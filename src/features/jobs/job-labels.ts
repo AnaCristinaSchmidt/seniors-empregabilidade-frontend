@@ -1,15 +1,10 @@
-import type { SkillType, WorkMode } from "./job-posting-schema";
+import type { WorkMode } from "./job-posting-schema";
 import type { JobStatus } from "./jobs-api";
 
 export const workModeLabels: Record<WorkMode, string> = {
   onsite: "Presencial",
   hybrid: "Híbrido",
   remote: "Remoto",
-};
-
-export const skillTypeLabels: Record<SkillType, string> = {
-  hard: "Técnica",
-  soft: "Comportamental",
 };
 
 export const jobStatusLabels: Record<JobStatus, string> = {

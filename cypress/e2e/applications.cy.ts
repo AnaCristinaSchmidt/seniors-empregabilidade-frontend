@@ -147,4 +147,79 @@ describe("candidate applications", () => {
     cy.contains("button", "Sair do processo").click();
     cy.get('[role="alertdialog"] [role="alert"]').should("not.exist");
   });
+
+  function jobPayload(
+    overrides: Record<string, unknown>,
+  ): Record<string, unknown> {
+    return {
+      id: activeApplication.job_id,
+      title: "Operations supervisor",
+      description: "Coordinate daily operations and support the team.",
+      company_id: "22222222-2222-4222-8222-222222222222",
+      company_name: "Example Company",
+      skills: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          name: "Spreadsheets",
+          type: "hard",
+        },
+      ],
+      work_mode: "hybrid",
+      location: "Example City",
+      closing_date: "2026-12-31",
+      status: "published",
+      published_at: "2026-10-01T12:00:00Z",
+      already_applied: false,
+      is_open: true,
+      is_expired: false,
+      is_applicable: true,
+      ...overrides,
+    };
+  }
+
+  function openJob(overrides: Record<string, unknown>): void {
+    cy.intercept("GET", `**/jobs/${activeApplication.job_id}`, {
+      body: jobPayload(overrides),
+    }).as("jobDetail");
+    cy.contains("a", "Ver a vaga").click();
+    cy.wait("@jobDetail");
+    cy.location("pathname").should(
+      "eq",
+      `/candidato/vagas/${activeApplication.job_id}`,
+    );
+  }
+
+  it("opens an applicable job from Ver a vaga", () => {
+    openJob({});
+    cy.contains("h2", "Operations supervisor").should("be.visible");
+    cy.contains("button", "Candidatar-se").should("be.enabled");
+  });
+
+  it("blocks applying when the opened job is expired", () => {
+    openJob({
+      status: "expired",
+      is_open: false,
+      is_expired: true,
+      is_applicable: false,
+    });
+    cy.contains("button", "Vaga expirada").should("be.disabled");
+    cy.contains("button", "Candidatar-se").should("not.exist");
+  });
+
+  it("blocks applying when the opened job is closed", () => {
+    openJob({
+      status: "closed",
+      is_open: false,
+      is_expired: false,
+      is_applicable: false,
+    });
+    cy.contains("button", "Vaga encerrada").should("be.disabled");
+  });
+
+  it("shows an existing application from the job detail", () => {
+    openJob({ already_applied: true, is_applicable: false });
+    cy.contains("button", "Já candidatado").should("be.disabled");
+    cy.contains("Operations supervisor").should("be.visible");
+    cy.contains("h2", "Analista").should("not.exist");
+  });
 });

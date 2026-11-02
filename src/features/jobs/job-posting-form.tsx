@@ -9,8 +9,9 @@ import { DialogClose, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { skillTypeLabels, skillTypes } from "@/lib/skill-type";
 
-import { skillTypeLabels, workModeLabels } from "./job-labels";
+import { workModeLabels } from "./job-labels";
 import {
   jobEditSchema,
   jobPostingSchema,
@@ -19,7 +20,6 @@ import {
   MAX_SKILL_NAME_LENGTH,
   normalizeSkillName,
   type SkillType,
-  skillTypes,
   todayIsoDate,
   workModes,
 } from "./job-posting-schema";

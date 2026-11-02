@@ -1,9 +1,14 @@
+import {
+  createRootRoute,
+  createRouter,
+  createMemoryHistory,
+  RouterContextProvider,
+} from "@tanstack/react-router";
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
-import type { ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   stubApiRoutes,
@@ -13,24 +18,6 @@ import {
 } from "../../../tests/api-stub";
 
 import { MyJobsPage } from "./my-jobs-page";
-
-// The page renders outside a router here; the link only needs its target.
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    to,
-    params,
-    children,
-    ...props
-  }: {
-    to: string;
-    params: { jobId: string };
-    children: ReactNode;
-  }) => (
-    <a href={to.replace("$jobId", params.jobId)} {...props}>
-      {children}
-    </a>
-  ),
-}));
 
 const published = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -133,9 +120,15 @@ function mount(routes: Record<string, StubRoute>) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  const router = createRouter({
+    routeTree: createRootRoute({ component: MyJobsPage }),
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  });
   render(
     <QueryClientProvider client={queryClient}>
-      <MyJobsPage />
+      <RouterContextProvider router={router}>
+        <MyJobsPage />
+      </RouterContextProvider>
     </QueryClientProvider>,
   );
   return userEvent.setup();

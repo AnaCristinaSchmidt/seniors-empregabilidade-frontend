@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { apiClient } from "@/lib/api-client";
+import { type DownloadedFile, fetchFile } from "@/lib/download-file";
 
 export interface DashboardFilters {
   start_date: string;
@@ -72,6 +73,16 @@ export function dashboardParams(filters: DashboardFilters): URLSearchParams {
     if (value) params.set(name, value);
   }
   return params;
+}
+/** The indicators and the applied filters as CSV. */
+export function exportDashboard(
+  filters: DashboardFilters,
+): Promise<DownloadedFile> {
+  const search = dashboardParams(filters).toString();
+  return fetchFile(
+    `/indicators/export${search ? `?${search}` : ""}`,
+    "relatorios.csv",
+  );
 }
 export function dashboardQueryOptions(filters: DashboardFilters) {
   const search = dashboardParams(filters).toString();

@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -169,6 +169,13 @@ function JobCard({ job, onStatusChanged }: JobCardProps) {
         {/* The space sits outside the span: a leading space inside it is
             dropped from the accessible name ("candidatosda"). */}
         Ver candidatos <span className="sr-only">da vaga {job.title}</span>
+      </Link>
+      <Link
+        to="/empresa/candidatos"
+        search={{ jobId: job.id }}
+        className="mt-4 inline-flex min-h-11 items-center rounded-md px-3 text-base font-medium underline underline-offset-4 focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        Gerenciar candidatos <span className="sr-only"> de {job.title}</span>
       </Link>
       <JobStatusActions job={job} onChanged={onStatusChanged} />
     </article>

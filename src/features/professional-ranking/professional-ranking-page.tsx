@@ -1,4 +1,4 @@
-import { getRouteApi } from "@tanstack/react-router";
+import { getRouteApi, Link } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { ProfessionalRankingView } from "./professional-ranking-view";
@@ -26,5 +26,16 @@ export function ProfessionalRankingPage() {
     );
   }
 
-  return <ProfessionalRankingView jobId={parsed.data.jobId} />;
+  return (
+    <>
+      <Link
+        to="/empresa/candidatos"
+        search={{ jobId: parsed.data.jobId }}
+        className="mx-6 mt-4 inline-flex min-h-11 items-center rounded-md px-3 text-base font-medium underline underline-offset-4 focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        Gerenciar candidaturas desta vaga
+      </Link>
+      <ProfessionalRankingView jobId={parsed.data.jobId} />
+    </>
+  );
 }
