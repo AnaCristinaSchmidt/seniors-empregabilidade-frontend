@@ -49,9 +49,12 @@ pnpm validate:push
 ## Remaining acceptance dependencies
 
 The baseline API exposes neither an expected company response time nor a closing
-reason; neither is invented by this screen. `Ver a vaga` remains disabled until
-US-12 provides the candidate detail endpoint and the detail modal is integrated.
-Suggested jobs are displayed from real data but have no invented destination.
-These dependencies prevent declaring every US-13 acceptance criterion complete.
+reason; neither is invented by this screen. `Ver a vaga` links to
+`/candidato/vagas/$jobId`. That screen reads `GET /jobs/{job_id}` for the job
+status and for whether this professional already applied; the applications list
+is not a second source for those states. Suggested jobs are displayed from real
+data but have no invented destination. The missing company response time and
+closing reason still prevent declaring every US-13 acceptance criterion complete.
 
-No new runtime dependency, production API contract or generated route is needed.
+No new runtime dependency or production API contract is needed. The job detail
+route is generated from `src/routes/candidato.vagas_.$jobId.tsx`.

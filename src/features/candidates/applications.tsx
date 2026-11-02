@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -15,7 +16,8 @@ import type {
 } from "./applications-schema";
 
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api-error";
@@ -324,9 +326,14 @@ function ApplicationCard({
             </Button>
           ) : !isClosed ? (
             <>
-              <Button variant="outline" disabled className="w-full">
+              <Link
+                to="/candidato/vagas/$jobId"
+                params={{ jobId: application.job_id }}
+                className={cn(buttonVariants({ variant: "outline" }), "w-full")}
+              >
                 Ver a vaga
-              </Button>
+                <span className="sr-only"> {application.job_title}</span>
+              </Link>
               <Button
                 variant="outline"
                 className="w-full"

@@ -1,6 +1,12 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterContextProvider,
+} from "@tanstack/react-router";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -68,9 +74,17 @@ function mount() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  const router = createRouter({
+    routeTree: createRootRoute(),
+    history: createMemoryHistory({
+      initialEntries: ["/candidato/candidaturas"],
+    }),
+  });
   render(
     <QueryClientProvider client={client}>
-      <ApplicationsPage />
+      <RouterContextProvider router={router}>
+        <ApplicationsPage />
+      </RouterContextProvider>
     </QueryClientProvider>,
   );
   return client;
