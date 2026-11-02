@@ -55,6 +55,9 @@ export const professionalProfileSchema = z.object({
   // Defaults to empty while a backend without certifications is deployed.
   certifications: z.array(certificationSchema).default([]),
   skills: z.array(skillSchema),
+  // Absent while a backend without the US-20-T05 opt-in is deployed; the
+  // profile then hides the automatic application section.
+  accepts_automatic_application: z.boolean().optional(),
 });
 
 export type Experience = z.infer<typeof experienceSchema>;
