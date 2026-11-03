@@ -163,6 +163,19 @@ async function publishThroughTheModal(user: UserEvent) {
 const EMPTY_STATE = /Você ainda não publicou vagas/;
 
 describe("MyJobsPage", () => {
+  it("links each job to its professionals ranked by compatibility", async () => {
+    mount({ "GET /jobs/me": { status: 200, data: [listedPublished] } });
+
+    const card = within(
+      await screen.findByRole("article", { name: published.title }),
+    );
+    expect(
+      card.getByRole("link", {
+        name: `Ver candidatos da vaga ${published.title}`,
+      }),
+    ).toHaveAttribute("href", `/empresa/vagas/${published.id}/candidatos`);
+  });
+
   it("announces while the jobs load", () => {
     mount({ "GET /jobs/me": () => new Promise<StubResponse>(() => {}) });
 

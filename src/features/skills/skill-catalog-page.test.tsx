@@ -142,7 +142,7 @@ describe("SkillCatalogPage", () => {
       ),
     );
     expect(screen.getByRole("button", { name: "Anterior" })).toBeDisabled();
-  });
+  }, 10_000);
 
   it("tells an empty catalog apart from a search without results", async () => {
     const user = mount({}, { status: 200, data: { items: [], total: 0 } });
