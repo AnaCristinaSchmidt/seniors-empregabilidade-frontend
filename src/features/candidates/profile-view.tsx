@@ -1,7 +1,8 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { missingFieldLabel } from "@/lib/resume-completeness";
 
 import { AutomaticApplicationSection } from "./automatic-application-section";
 import { startDownload } from "./certification-download";
@@ -30,8 +31,47 @@ export function ProfileView() {
     isError,
     error,
     refetch,
+    isFetching,
+    dataUpdatedAt,
+    failureCount,
   } = useQuery(professionalProfileQueryOptions);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [focusField, setFocusField] = useState<string>();
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const focusReturnRef = useRef<{
+    dataUpdatedAt: number;
+    failureCount: number;
+  } | null>(null);
+
+  function openEditor(opener: HTMLElement, field?: string) {
+    openerRef.current = opener;
+    setFocusField(field);
+    setIsEditOpen(true);
+  }
+
+  function handleEditorOpenChange(open: boolean) {
+    if (!open) {
+      focusReturnRef.current = { dataUpdatedAt, failureCount };
+    }
+    setIsEditOpen(open);
+  }
+
+  // The editor unmounts while the page is still inert, so the dialog's own
+  // return focus lands on <body>. Saving can also remove the opener.
+  useEffect(() => {
+    const opener = openerRef.current;
+    const previousQuery = focusReturnRef.current;
+    if (isEditOpen || !opener || !previousQuery || isFetching) return;
+    const querySettled =
+      dataUpdatedAt > previousQuery.dataUpdatedAt ||
+      failureCount > previousQuery.failureCount;
+    if (!querySettled) return;
+
+    (opener.isConnected ? opener : editButtonRef.current)?.focus();
+    openerRef.current = null;
+    focusReturnRef.current = null;
+  }, [dataUpdatedAt, failureCount, isEditOpen, isFetching]);
 
   // isPending cobre tanto "carregando" quanto "sem dados ainda porque a
   // query está pausada" (ex.: offline, com networkMode padrão) — usar
@@ -56,16 +96,28 @@ export function ProfileView() {
     <main className="min-h-full bg-muted p-4 md:p-8">
       <div className="mb-6 flex items-start justify-between gap-3">
         <h1 className="text-3xl font-bold text-foreground">Meu perfil</h1>
-        <Button type="button" onClick={() => setIsEditOpen(true)}>
+        <Button
+          ref={editButtonRef}
+          type="button"
+          onClick={(event) => openEditor(event.currentTarget)}
+        >
           Editar perfil
         </Button>
       </div>
 
       <EditProfileModal
         open={isEditOpen}
-        onOpenChange={setIsEditOpen}
+        onOpenChange={handleEditorOpenChange}
         profile={profile}
+        focusField={focusField}
       />
+
+      {profile.missing_fields ? (
+        <ResumeCompleteness
+          missingFields={profile.missing_fields}
+          onComplete={openEditor}
+        />
+      ) : null}
 
       <div className="flex flex-col gap-6 lg:flex-row">
         {/* Coluna principal */}
@@ -100,6 +152,68 @@ export function ProfileView() {
         </div>
       </div>
     </main>
+  );
+}
+
+function ResumeCompleteness({
+  missingFields,
+  onComplete,
+}: {
+  missingFields: string[];
+  onComplete: (opener: HTMLElement, field: string) => void;
+}) {
+  if (missingFields.length === 0) {
+    return (
+      <section
+        aria-labelledby="resume-completeness"
+        className="mb-6 rounded-lg border border-border bg-background p-6"
+      >
+        <h2 id="resume-completeness" className="text-xl font-bold text-success">
+          Currículo completo
+        </h2>
+        <p className="text-lg text-foreground">
+          Todas as informações do seu currículo estão preenchidas.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      aria-labelledby="resume-completeness"
+      className="mb-6 rounded-lg border border-warning-border bg-warning-background p-6"
+    >
+      <h2
+        id="resume-completeness"
+        className="text-xl font-bold text-foreground"
+      >
+        Complete seu currículo
+      </h2>
+      <p className="mb-3 text-lg text-foreground">
+        Faltam estas informações para as empresas conhecerem você melhor:
+      </p>
+      <ul className="flex flex-col gap-2">
+        {missingFields.map((field) => {
+          const label = missingFieldLabel(field);
+          return (
+            <li
+              key={field}
+              className="flex flex-wrap items-center justify-between gap-2"
+            >
+              <span className="text-lg text-foreground">{label}</span>
+              <Button
+                type="button"
+                variant="outline"
+                aria-label={`Completar ${label}`}
+                onClick={(event) => onComplete(event.currentTarget, field)}
+              >
+                Completar
+              </Button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

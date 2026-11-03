@@ -180,6 +180,7 @@ export function SkillSelection({
         <FieldLabel htmlFor={inputId}>Buscar no catálogo</FieldLabel>
         <Input
           id={inputId}
+          data-pending-field="skills"
           disabled={disabled}
           value={term}
           autoComplete="off"

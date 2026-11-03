@@ -78,6 +78,8 @@ interface EditProfileModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   profile: ProfessionalProfile;
+  // A missing_fields key whose control should receive focus on opening.
+  focusField?: string | undefined;
 }
 
 function defaultValuesFrom(
@@ -96,21 +98,24 @@ export function EditProfileModal({
   open,
   onOpenChange,
   profile,
+  focusField,
 }: EditProfileModalProps) {
   // Mount a fresh draft on each opening, without resetting an active edit
   // when a background profile query updates.
   return open ? (
-    <EditProfileEditor profile={profile} onOpenChange={onOpenChange} />
+    <EditProfileEditor
+      profile={profile}
+      onOpenChange={onOpenChange}
+      focusField={focusField}
+    />
   ) : null;
 }
 
 function EditProfileEditor({
   profile,
   onOpenChange,
-}: {
-  profile: ProfessionalProfile;
-  onOpenChange: (open: boolean) => void;
-}) {
+  focusField,
+}: Omit<EditProfileModalProps, "open">) {
   const queryClient = useQueryClient();
 
   const {
@@ -217,6 +222,14 @@ function EditProfileEditor({
       <DialogContent
         className="max-h-[90vh] max-w-3xl overflow-y-auto"
         showCloseButton={!mutation.isPending && !justSaved}
+        initialFocus={
+          focusField
+            ? () =>
+                document.querySelector<HTMLElement>(
+                  `[data-pending-field="${focusField}"]`,
+                ) ?? true
+            : undefined
+        }
       >
         <DialogHeader>
           <DialogTitle className="text-2xl">Editar perfil</DialogTitle>
@@ -283,6 +296,7 @@ function EditProfileEditor({
                 <FieldLabel htmlFor="city">Cidade</FieldLabel>
                 <Input
                   id="city"
+                  data-pending-field="city"
                   aria-invalid={errors.city ? true : undefined}
                   aria-describedby={errors.city ? "city-error" : undefined}
                   {...register("city")}
@@ -294,6 +308,7 @@ function EditProfileEditor({
                 <FieldLabel htmlFor="state">Estado</FieldLabel>
                 <Input
                   id="state"
+                  data-pending-field="state"
                   maxLength={2}
                   className="uppercase"
                   aria-invalid={errors.state ? true : undefined}
@@ -308,6 +323,7 @@ function EditProfileEditor({
               <FieldLabel htmlFor="summary">Resumo</FieldLabel>
               <Textarea
                 id="summary"
+                data-pending-field="summary"
                 rows={4}
                 aria-invalid={errors.summary ? true : undefined}
                 aria-describedby={errors.summary ? "summary-error" : undefined}
@@ -639,6 +655,7 @@ function ExperienceFieldset({
         <Button
           type="button"
           variant="outline"
+          data-pending-field="experiences"
           onClick={startAdd}
           disabled={editingId !== null}
         >
@@ -902,6 +919,7 @@ function EducationFieldset({
         <Button
           type="button"
           variant="outline"
+          data-pending-field="education"
           onClick={startAdd}
           disabled={editingId !== null}
         >

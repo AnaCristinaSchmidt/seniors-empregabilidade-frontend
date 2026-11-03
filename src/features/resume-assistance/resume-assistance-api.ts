@@ -4,7 +4,6 @@ import { z } from "zod";
 import { apiClient } from "@/lib/api-client";
 import { ApiError } from "@/lib/api-error";
 
-// Proposed for US-08-T01; the backend does not serve these routes yet.
 const PROFESSIONALS_ENDPOINT = "/professionals";
 // shortcut: first page only, add paging when the list outgrows it.
 const PAGE_SIZE = 50;
@@ -53,19 +52,6 @@ export const guidanceValuesSchema = z.object({
 });
 
 export type GuidanceValues = z.infer<typeof guidanceValuesSchema>;
-
-const missingFieldLabels: Record<string, string> = {
-  city: "Cidade",
-  state: "Estado",
-  summary: "Resumo profissional",
-  experiences: "Experiência profissional",
-  education: "Formação",
-  skills: "Habilidades",
-};
-
-export function missingFieldLabel(field: string): string {
-  return missingFieldLabels[field] ?? field;
-}
 
 export async function fetchResumes(
   filters: ResumeFilters,

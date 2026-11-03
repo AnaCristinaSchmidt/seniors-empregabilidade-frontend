@@ -55,6 +55,9 @@ export const professionalProfileSchema = z.object({
   // Defaults to empty while a backend without certifications is deployed.
   certifications: z.array(certificationSchema).default([]),
   skills: z.array(skillSchema),
+  // Absent from older backends; when present, these are the exact fields the
+  // professional still needs to complete.
+  missing_fields: z.array(z.string()).optional(),
   // Absent while a backend without the US-20-T05 opt-in is deployed; the
   // profile then hides the automatic application section.
   accepts_automatic_application: z.boolean().optional(),

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { missingFieldLabel } from "@/lib/resume-completeness";
 
 import {
   type CompletenessFilter,
@@ -24,7 +25,6 @@ import {
   guidanceErrorMessage,
   type GuidanceValues,
   guidanceValuesSchema,
-  missingFieldLabel,
   NOTE_MAX_LENGTH,
   recordGuidance,
   type ResumeFilters,

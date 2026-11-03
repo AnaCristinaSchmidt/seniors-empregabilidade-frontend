@@ -4,6 +4,7 @@ import {
   cleanup,
   render as renderComponent,
   screen,
+  waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -15,7 +16,7 @@ import { startDownload } from "./certification-download";
 import { ProfileView } from "./profile-view";
 
 vi.mock("@/lib/api-client", () => ({
-  apiClient: { get: vi.fn(), patch: vi.fn() },
+  apiClient: { get: vi.fn(), patch: vi.fn(), post: vi.fn() },
 }));
 vi.mock("./certification-download", () => ({ startDownload: vi.fn() }));
 
@@ -263,6 +264,179 @@ describe("ProfileView", () => {
       "https://storage.example.invalid/c1?sig=1",
     );
   });
+
+  it("shows no completeness notice when the backend omits missing_fields", async () => {
+    vi.spyOn(apiClient, "get").mockResolvedValueOnce({ data: validProfile });
+
+    render(<ProfileView />);
+
+    await screen.findByText("Marcos Silveira");
+    expect(
+      screen.queryByRole("heading", { name: /currículo completo/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /complete seu currículo/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("tells the professional the résumé is complete", async () => {
+    vi.spyOn(apiClient, "get").mockResolvedValueOnce({
+      data: { ...validProfile, missing_fields: [] },
+    });
+
+    render(<ProfileView />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Currículo completo" }),
+    ).toBeVisible();
+  });
+
+  it("lists each pending field and opens the editor on it", async () => {
+    const user = userEvent.setup();
+    mockGet(() =>
+      Promise.resolve({
+        data: {
+          ...validProfile,
+          city: null,
+          skills: [],
+          missing_fields: ["city", "skills"],
+        },
+      }),
+    );
+
+    render(<ProfileView />);
+
+    const notice = (
+      await screen.findByRole("heading", { name: "Complete seu currículo" })
+    ).closest("section")!;
+    expect(notice).toHaveTextContent("Cidade");
+    expect(notice).toHaveTextContent("Habilidades");
+
+    await user.click(screen.getByRole("button", { name: "Completar Cidade" }));
+    await screen.findByRole("dialog", { name: /editar perfil/i });
+    await waitFor(() => expect(screen.getByLabelText("Cidade")).toHaveFocus());
+  });
+
+  it("returns focus to the edit button once saving clears the pending item", async () => {
+    const user = userEvent.setup();
+    const incomplete = {
+      ...validProfile,
+      city: null,
+      missing_fields: ["city"],
+    };
+    let stored: object = incomplete;
+    mockGet(() => Promise.resolve({ data: stored }));
+    vi.spyOn(apiClient, "patch").mockImplementationOnce(() => {
+      stored = { ...incomplete, city: "Porto Alegre", missing_fields: [] };
+      return Promise.resolve({ data: stored });
+    });
+
+    render(<ProfileView />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Completar Cidade" }),
+    );
+    await waitFor(() => expect(screen.getByLabelText("Cidade")).toHaveFocus());
+    await user.type(screen.getByLabelText("Cidade"), "Porto Alegre");
+    await user.click(
+      screen.getByRole("button", { name: /salvar alterações/i }),
+    );
+
+    expect(
+      await screen.findByRole(
+        "heading",
+        { name: "Currículo completo" },
+        { timeout: 3000 },
+      ),
+    ).toBeVisible();
+    await waitFor(
+      () =>
+        expect(
+          screen.getByRole("button", { name: /editar perfil/i }),
+        ).toHaveFocus(),
+      { timeout: 3000 },
+    );
+  });
+
+  it.each([
+    {
+      field: "experiences",
+      label: "Experiência profissional",
+      addButton: "Adicionar experiência",
+      inputs: [
+        ["Cargo", "Analista de operações"],
+        ["Empresa", "Log Brasil"],
+        ["Início", "2019-01-01"],
+      ] as [string, string][],
+      item: {
+        id: "exp-2",
+        role: "Analista de operações",
+        company_name: "Log Brasil",
+        start_date: "2019-01-01",
+        end_date: null,
+        description: null,
+      },
+    },
+    {
+      field: "education",
+      label: "Formação",
+      addButton: "Adicionar formação",
+      inputs: [["Instituição", "Universidade Exemplo"]] as [string, string][],
+      item: {
+        id: "edu-2",
+        institution: "Universidade Exemplo",
+        degree: null,
+        field: null,
+        start_date: null,
+        end_date: null,
+      },
+    },
+  ])(
+    "returns focus to Editar perfil after completing $label and closing the editor",
+    async ({ field, label, addButton, inputs, item }) => {
+      const user = userEvent.setup();
+      const incomplete = {
+        ...validProfile,
+        [field]: [],
+        missing_fields: [field],
+      };
+      let stored: object = incomplete;
+      mockGet(() => Promise.resolve({ data: stored }));
+      const createItem = vi
+        .spyOn(apiClient, "post")
+        .mockImplementationOnce(() => {
+          stored = {
+            ...incomplete,
+            [field]: [item],
+            missing_fields: [],
+          };
+          return Promise.resolve({ data: item });
+        });
+
+      render(<ProfileView />);
+
+      await user.click(
+        await screen.findByRole("button", { name: `Completar ${label}` }),
+      );
+      await user.click(await screen.findByRole("button", { name: addButton }));
+      for (const [name, value] of inputs) {
+        await user.type(screen.getByLabelText(name), value);
+      }
+      await user.click(screen.getByRole("button", { name: "Concluir" }));
+
+      await waitFor(() => expect(createItem).toHaveBeenCalledOnce());
+      await user.click(screen.getByRole("button", { name: "Cancelar" }));
+
+      expect(
+        await screen.findByRole("heading", { name: "Currículo completo" }),
+      ).toBeVisible();
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: /editar perfil/i }),
+        ).toHaveFocus(),
+      );
+    },
+  );
 
   it("explains a failed download", async () => {
     const user = userEvent.setup();
