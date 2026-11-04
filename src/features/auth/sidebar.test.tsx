@@ -78,6 +78,10 @@ describe("Sidebar", () => {
       "href",
       "/candidato/perfil",
     );
+    expect(screen.getByRole("link", { name: "Como usar" })).toHaveAttribute(
+      "href",
+      "/candidato/como-usar",
+    );
   });
 
   it("marks the current page with aria-current", () => {
@@ -96,7 +100,7 @@ describe("Sidebar", () => {
   it("shows the remaining candidate nav items as static text, not as controls", () => {
     render(<Sidebar userType="candidate" />);
 
-    ["Capacitação", "Como usar"].forEach((label) => {
+    ["Capacitação"].forEach((label) => {
       expect(screen.getByText(label)).toBeVisible();
       expect(
         screen.queryByRole("button", { name: label }),

@@ -25,6 +25,7 @@ import { Route as AdministradorCompetenciasRouteImport } from './routes/administ
 import { Route as AdministradorContasRouteImport } from './routes/administrador.contas'
 import { Route as CandidatoIndexRouteImport } from './routes/candidato.index'
 import { Route as CandidatoCandidaturasRouteImport } from './routes/candidato.candidaturas'
+import { Route as CandidatoComoUsarRouteImport } from './routes/candidato.como-usar'
 import { Route as CandidatoNotificacoesRouteImport } from './routes/candidato.notificacoes'
 import { Route as CandidatoPerfilRouteImport } from './routes/candidato.perfil'
 import { Route as CandidatoVagasRouteImport } from './routes/candidato.vagas'
@@ -117,6 +118,11 @@ const CandidatoCandidaturasRoute = CandidatoCandidaturasRouteImport.update({
   path: '/candidaturas',
   getParentRoute: () => CandidatoRoute,
 } as any)
+const CandidatoComoUsarRoute = CandidatoComoUsarRouteImport.update({
+  id: '/como-usar',
+  path: '/como-usar',
+  getParentRoute: () => CandidatoRoute,
+} as any)
 const CandidatoNotificacoesRoute = CandidatoNotificacoesRouteImport.update({
   id: '/notificacoes',
   path: '/notificacoes',
@@ -184,6 +190,7 @@ export interface FileRoutesByFullPath {
   '/administrador/competencias': typeof AdministradorCompetenciasRoute
   '/administrador/contas': typeof AdministradorContasRoute
   '/candidato/candidaturas': typeof CandidatoCandidaturasRoute
+  '/candidato/como-usar': typeof CandidatoComoUsarRoute
   '/candidato/notificacoes': typeof CandidatoNotificacoesRoute
   '/candidato/perfil': typeof CandidatoPerfilRoute
   '/candidato/vagas': typeof CandidatoVagasRoute
@@ -209,6 +216,7 @@ export interface FileRoutesByTo {
   '/administrador/competencias': typeof AdministradorCompetenciasRoute
   '/administrador/contas': typeof AdministradorContasRoute
   '/candidato/candidaturas': typeof CandidatoCandidaturasRoute
+  '/candidato/como-usar': typeof CandidatoComoUsarRoute
   '/candidato/notificacoes': typeof CandidatoNotificacoesRoute
   '/candidato/perfil': typeof CandidatoPerfilRoute
   '/candidato/vagas': typeof CandidatoVagasRoute
@@ -238,6 +246,7 @@ export interface FileRoutesById {
   '/administrador/competencias': typeof AdministradorCompetenciasRoute
   '/administrador/contas': typeof AdministradorContasRoute
   '/candidato/candidaturas': typeof CandidatoCandidaturasRoute
+  '/candidato/como-usar': typeof CandidatoComoUsarRoute
   '/candidato/notificacoes': typeof CandidatoNotificacoesRoute
   '/candidato/perfil': typeof CandidatoPerfilRoute
   '/candidato/vagas': typeof CandidatoVagasRoute
@@ -268,6 +277,7 @@ export interface FileRouteTypes {
     | '/administrador/competencias'
     | '/administrador/contas'
     | '/candidato/candidaturas'
+    | '/candidato/como-usar'
     | '/candidato/notificacoes'
     | '/candidato/perfil'
     | '/candidato/vagas'
@@ -293,6 +303,7 @@ export interface FileRouteTypes {
     | '/administrador/competencias'
     | '/administrador/contas'
     | '/candidato/candidaturas'
+    | '/candidato/como-usar'
     | '/candidato/notificacoes'
     | '/candidato/perfil'
     | '/candidato/vagas'
@@ -321,6 +332,7 @@ export interface FileRouteTypes {
     | '/administrador/competencias'
     | '/administrador/contas'
     | '/candidato/candidaturas'
+    | '/candidato/como-usar'
     | '/candidato/notificacoes'
     | '/candidato/perfil'
     | '/candidato/vagas'
@@ -463,6 +475,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CandidatoCandidaturasRouteImport
       parentRoute: typeof CandidatoRoute
     }
+    '/candidato/como-usar': {
+      id: '/candidato/como-usar'
+      path: '/como-usar'
+      fullPath: '/candidato/como-usar'
+      preLoaderRoute: typeof CandidatoComoUsarRouteImport
+      parentRoute: typeof CandidatoRoute
+    }
     '/candidato/notificacoes': {
       id: '/candidato/notificacoes'
       path: '/notificacoes'
@@ -556,6 +575,7 @@ const AdministradorRouteWithChildren = AdministradorRoute._addFileChildren(
 
 interface CandidatoRouteChildren {
   CandidatoCandidaturasRoute: typeof CandidatoCandidaturasRoute
+  CandidatoComoUsarRoute: typeof CandidatoComoUsarRoute
   CandidatoNotificacoesRoute: typeof CandidatoNotificacoesRoute
   CandidatoPerfilRoute: typeof CandidatoPerfilRoute
   CandidatoVagasRoute: typeof CandidatoVagasRoute
@@ -565,6 +585,7 @@ interface CandidatoRouteChildren {
 
 const CandidatoRouteChildren: CandidatoRouteChildren = {
   CandidatoCandidaturasRoute: CandidatoCandidaturasRoute,
+  CandidatoComoUsarRoute: CandidatoComoUsarRoute,
   CandidatoNotificacoesRoute: CandidatoNotificacoesRoute,
   CandidatoPerfilRoute: CandidatoPerfilRoute,
   CandidatoVagasRoute: CandidatoVagasRoute,
