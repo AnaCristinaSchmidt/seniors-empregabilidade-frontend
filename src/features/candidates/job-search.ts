@@ -15,12 +15,13 @@ const DEFAULT_LIMIT = 20;
 export async function fetchJobs(
   search: string,
   signal?: AbortSignal,
+  limit: number = DEFAULT_LIMIT,
 ): Promise<JobSearchResult[]> {
   const params = new URLSearchParams();
   if (search.trim()) {
     params.set("search", search.trim());
   }
-  params.set("limit", String(DEFAULT_LIMIT));
+  params.set("limit", String(limit));
   params.set("offset", "0");
 
   const response = await apiClient.get<unknown>(

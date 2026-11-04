@@ -58,6 +58,8 @@ export const professionalProfileSchema = z.object({
   // Absent from older backends; when present, these are the exact fields the
   // professional still needs to complete.
   missing_fields: z.array(z.string()).optional(),
+  // Share of the same US-08 fields filled in (US-32); absent from older backends.
+  completion_percentage: z.number().int().min(0).max(100).optional(),
   // Absent while a backend without the US-20-T05 opt-in is deployed; the
   // profile then hides the automatic application section.
   accepts_automatic_application: z.boolean().optional(),

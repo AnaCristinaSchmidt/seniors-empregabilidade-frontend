@@ -4,8 +4,9 @@ const GENERIC_APPLY_ERROR =
   "Não foi possível enviar a candidatura. Tente novamente.";
 
 const applyMessages: Record<string, string> = {
-  already_applied: "Você já se candidatou a esta vaga.",
-  job_closed: "Esta vaga está encerrada.",
+  // Stable codes from app/applications/exceptions.py in the backend.
+  application_already_exists: "Você já se candidatou a esta vaga.",
+  job_not_open: "Esta vaga está encerrada.",
   job_not_found: "Não encontramos esta vaga.",
   invalid_job_application_response: GENERIC_APPLY_ERROR,
 };

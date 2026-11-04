@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   searchSchema,
   fetchApplications,
+  formatSubmittedDate,
   withdrawApplication,
 } from "./applications-schema";
 
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api-error";
+import { applicationStatusLabel } from "@/lib/application-status";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -287,7 +289,7 @@ function ApplicationCard({
               {application.job_title} · {application.company_name}
             </h2>
             <p className="text-base text-muted-foreground">
-              {getApplicationStatusLabel(application.status)}
+              {applicationStatusLabel(application.status)}
             </p>
 
             <div className="pt-2 text-base text-foreground">
@@ -395,33 +397,8 @@ function getCompanyInitials(companyName: string): string {
   return `${firstInitial}${secondInitial}`.toUpperCase();
 }
 
-function getApplicationStatusLabel(status: ApplicationStatus): string {
-  switch (status) {
-    case "applied":
-      return "Candidatura enviada";
-
-    case "under_review":
-      return "Em análise";
-
-    case "in_selection_process":
-      return "Em processo seletivo";
-
-    case "hired":
-      return "Você foi selecionado";
-
-    case "not_selected":
-      return "Você não foi selecionado";
-
-    case "withdrawn":
-      return "Você saiu do processo seletivo";
-
-    case "expired":
-      return "Candidatura expirada";
-  }
-}
-
 function getApplicationDescription(application: Application): string {
-  const submittedDate = formatDate(application.submitted_at);
+  const submittedDate = formatSubmittedDate(application.submitted_at);
 
   switch (application.status) {
     case "applied":
@@ -445,14 +422,6 @@ function getApplicationDescription(application: Application): string {
     case "expired":
       return `Enviada em ${submittedDate}. Esta candidatura não está mais ativa.`;
   }
-}
-
-function formatDate(date: string): string {
-  return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: "America/Sao_Paulo",
-    day: "numeric",
-    month: "long",
-  }).format(new Date(date));
 }
 
 function withdrawalErrorMessage(

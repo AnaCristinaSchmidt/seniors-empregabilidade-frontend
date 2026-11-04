@@ -60,8 +60,8 @@ export function JobVacancyDetail({
     onError: async (error) => {
       if (
         error instanceof ApiError &&
-        (error.code === "already_applied" ||
-          error.code === "job_closed" ||
+        (error.code === "application_already_exists" ||
+          error.code === "job_not_open" ||
           error.code === "job_not_found")
       ) {
         await client.invalidateQueries({ queryKey: jobDetailQueryKey(jobId) });

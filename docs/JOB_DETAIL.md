@@ -24,9 +24,11 @@ while details load or refresh, after a detail failure, and during submission.
 labels. A job with status `published` can still be expired according to the
 server's calendar rules. The frontend does not reproduce those rules.
 
-Application submission retains `POST /api/v1/job-postings/{id}/applications`.
+Application submission uses `POST /api/v1/applications` with `{ "job_id": "<id>" }`,
+the only application route the backend exposes (US-13). Its conflict codes are
+`application_already_exists` and `job_not_open`; `job_not_found` answers 404.
 Success updates the detail query and invalidates application and search data.
-`already_applied`, `job_closed` and `job_not_found` errors refresh the detail
+`application_already_exists`, `job_not_open` and `job_not_found` errors refresh the detail
 query to reconcile concurrent changes. Switching jobs or reopening the modal
 starts a new mutation state; late results cannot show success for another job.
 

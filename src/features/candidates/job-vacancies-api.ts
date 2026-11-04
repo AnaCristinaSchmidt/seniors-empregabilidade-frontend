@@ -12,9 +12,11 @@ export async function applyToJobVacancy(
   jobPostingId: string,
   signal?: AbortSignal,
 ): Promise<JobApplication> {
+  // POST /applications (US-13) takes the job in the body; the backend has no
+  // per-job application route.
   const response = await apiClient.post<unknown>(
-    `/job-postings/${jobPostingId}/applications`,
-    {},
+    "/applications",
+    { job_id: jobPostingId },
     signal ? { signal } : {},
   );
 

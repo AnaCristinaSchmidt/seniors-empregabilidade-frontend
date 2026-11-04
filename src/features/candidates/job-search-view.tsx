@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { jobSearchQueryOptions } from "./job-search";
 import type { JobSearchResult, WorkMode } from "./job-search-schema";
 import { JobVacancyDetailModal } from "./job-vacancy-detail-modal";
+import { formatMissingSkills } from "./job-vacancy-format";
 
 const WORK_MODE_LABELS: Record<WorkMode, string> = {
   onsite: "Presencial",
@@ -166,7 +167,7 @@ function JobCard({
         <strong>
           {job.matched_skill_count} dos {job.required_skill_count} requisitos
         </strong>
-        . {formatMissingSkills(job.missing_skills)}
+        . {formatMissingSkills(job.missing_skills.map((skill) => skill.name))}
       </p>
 
       <Button
@@ -204,21 +205,6 @@ function formatPublishedAgo(days: number | null): string | null {
     return "há 1 dia";
   }
   return `há ${days} dias`;
-}
-
-function formatMissingSkills(
-  missingSkills: JobSearchResult["missing_skills"],
-): string {
-  if (missingSkills.length === 0) {
-    return "Você atende todos os requisitos.";
-  }
-  const names = missingSkills.map((skill) => skill.name);
-  if (names.length === 1) {
-    return `Falta ${names[0]}.`;
-  }
-  const last = names[names.length - 1];
-  const rest = names.slice(0, -1);
-  return `Faltam ${rest.join(", ")} e ${last}.`;
 }
 
 function JobSearchSkeleton() {

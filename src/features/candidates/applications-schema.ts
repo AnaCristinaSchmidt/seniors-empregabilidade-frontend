@@ -45,15 +45,22 @@ export type Application = z.infer<typeof applicationSchema>;
 
 interface FetchApplicationsParams {
   companyName?: string;
+  /** Keeps only the most recently submitted applications. */
+  limit?: number;
   signal?: AbortSignal;
 }
 
 export async function fetchApplications({
   companyName,
+  limit,
   signal,
 }: FetchApplicationsParams = {}): Promise<Application[]> {
+  const params = {
+    ...(companyName ? { company_name: companyName } : {}),
+    ...(limit ? { limit } : {}),
+  };
   const response = await apiClient.get<unknown>("/applications/me", {
-    ...(companyName ? { params: { company_name: companyName } } : {}),
+    ...(Object.keys(params).length > 0 ? { params } : {}),
     ...(signal ? { signal } : {}),
   });
 
@@ -77,4 +84,13 @@ export async function withdrawApplication(id: string): Promise<Application> {
   } catch (error) {
     throw toApiError(error);
   }
+}
+
+/** Submission day as the candidate reads it, e.g. "3 de novembro". */
+export function formatSubmittedDate(date: string): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "numeric",
+    month: "long",
+  }).format(new Date(date));
 }

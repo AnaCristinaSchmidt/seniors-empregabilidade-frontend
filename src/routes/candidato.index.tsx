@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { RoleHomePage } from "@/features/auth/role-home-page";
+import { CandidateHome } from "@/features/candidates/candidate-home";
 
 export const Route = createFileRoute("/candidato/")({
-  component: () => <RoleHomePage title="Área do candidato" />,
+  component: () => <CandidateHome />,
 });

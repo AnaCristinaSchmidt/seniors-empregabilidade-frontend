@@ -10,7 +10,7 @@ describe("applyToJobVacancyErrorMessage", () => {
       applyToJobVacancyErrorMessage(
         new ApiError({
           message: "Application already exists",
-          code: "already_applied",
+          code: "application_already_exists",
         }),
       ),
     ).toBe("Você já se candidatou a esta vaga.");
@@ -19,7 +19,7 @@ describe("applyToJobVacancyErrorMessage", () => {
   it("translates a closed vacancy and a missing vacancy", () => {
     expect(
       applyToJobVacancyErrorMessage(
-        new ApiError({ message: "closed", code: "job_closed" }),
+        new ApiError({ message: "closed", code: "job_not_open" }),
       ),
     ).toBe("Esta vaga está encerrada.");
     expect(

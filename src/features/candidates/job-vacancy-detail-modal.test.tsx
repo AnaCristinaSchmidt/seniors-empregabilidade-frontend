@@ -19,7 +19,7 @@ let stub: ApiStub;
 let detailResponse: StubResponse;
 let applicationResponse: () => StubResponse | Promise<StubResponse>;
 let detailReply: () => StubResponse | Promise<StubResponse>;
-const applicationPath = `POST /job-postings/${jobDetail.id}/applications`;
+const applicationPath = "POST /applications";
 
 beforeEach(() => {
   detailResponse = { status: 200, data: jobDetail };
@@ -269,8 +269,8 @@ describe("JobVacancyDetailModal", () => {
   });
 
   it.each([
-    ["already_applied", { already_applied: true }, "Já candidatado"],
-    ["job_closed", { status: "closed", is_open: false }, "Vaga encerrada"],
+    ["application_already_exists", { already_applied: true }, "Já candidatado"],
+    ["job_not_open", { status: "closed", is_open: false }, "Vaga encerrada"],
   ] as const)(
     "refreshes details after %s instead of keeping an actionable stale button",
     async (code, overrides, label) => {

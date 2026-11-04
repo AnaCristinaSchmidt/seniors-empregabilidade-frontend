@@ -88,3 +88,16 @@ export function formatVacancyMeta(
     .filter(Boolean)
     .join(" · ");
 }
+
+/** "Falta X." / "Faltam X, Y e Z." for the job skills the résumé lacks. */
+export function formatMissingSkills(names: readonly string[]): string {
+  if (names.length === 0) {
+    return "Você atende todos os requisitos.";
+  }
+  if (names.length === 1) {
+    return `Falta ${names[0]}.`;
+  }
+  const last = names[names.length - 1];
+  const rest = names.slice(0, -1);
+  return `Faltam ${rest.join(", ")} e ${last}.`;
+}

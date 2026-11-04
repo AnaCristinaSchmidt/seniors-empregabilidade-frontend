@@ -71,17 +71,14 @@ describe("candidate job detail", () => {
     cy.intercept("GET", `**/jobs/${jobDetail.id}`, (request) => {
       request.reply({ body: detail, delay: 150 });
     }).as("detail");
-    cy.intercept(
-      "POST",
-      `**/job-postings/${jobDetail.id}/applications`,
-      (request) => {
-        detail = { ...detail, already_applied: true, is_applicable: false };
-        request.reply({
-          statusCode: 201,
-          body: { id: "88888888-8888-4888-8888-888888888888" },
-        });
-      },
-    ).as("apply");
+    cy.intercept("POST", "**/applications", (request) => {
+      expect(request.body).to.deep.equal({ job_id: jobDetail.id });
+      detail = { ...detail, already_applied: true, is_applicable: false };
+      request.reply({
+        statusCode: 201,
+        body: { id: "88888888-8888-4888-8888-888888888888" },
+      });
+    }).as("apply");
     cy.visit("/candidato/vagas", {
       onBeforeLoad(window) {
         window.sessionStorage.setItem(
