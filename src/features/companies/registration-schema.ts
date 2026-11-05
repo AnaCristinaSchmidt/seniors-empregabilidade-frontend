@@ -50,12 +50,36 @@ export function maskedCaret(masked: string, digitsBeforeCaret: number): number {
   return masked.length;
 }
 
-const required = (max: number) =>
+export const required = (max: number) =>
   z
     .string()
     .trim()
     .min(1, "Preencha este campo.")
     .max(max, `Use até ${max} caracteres.`);
+
+/** Mirrors AddressRequest in the backend, shared by registration and profile. */
+export const companyAddressSchema = z.object({
+  zip_code: z
+    .string()
+    .refine(
+      (value) => /^\d{8}$/.test(digits(value)),
+      "Informe um CEP com 8 números.",
+    ),
+  street: required(150),
+  number: required(10),
+  complement: z.string().trim().max(100, "Use até 100 caracteres."),
+  neighborhood: required(100),
+  city: required(100),
+  state: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(
+      /^(AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)$/,
+      "Informe a sigla do estado, como RS.",
+    ),
+});
+export type CompanyAddressValues = z.infer<typeof companyAddressSchema>;
 export const companyRegistrationSchema = z
   .object({
     cnpj: z.string().refine(isValidCnpj, "Informe um CNPJ válido."),
@@ -80,25 +104,7 @@ export const companyRegistrationSchema = z
           return false;
         }
       }, "Informe o endereço HTTPS da empresa no LinkedIn."),
-    address: z.object({
-      zip_code: z
-        .string()
-        .refine(
-          (value) => /^\d{8}$/.test(digits(value)),
-          "Informe um CEP com 8 números.",
-        ),
-      street: required(150),
-      number: required(10),
-      complement: z.string().max(100),
-      neighborhood: required(100),
-      city: required(100),
-      state: z
-        .string()
-        .regex(
-          /^(AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)$/,
-          "Informe a sigla do estado.",
-        ),
-    }),
+    address: companyAddressSchema,
     password: z
       .string()
       .min(8, "Use pelo menos 8 caracteres.")

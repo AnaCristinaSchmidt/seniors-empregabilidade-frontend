@@ -32,6 +32,7 @@ import { Route as CandidatoVagasRouteImport } from './routes/candidato.vagas'
 import { Route as EmpresaIndexRouteImport } from './routes/empresa.index'
 import { Route as EmpresaCandidatosRouteImport } from './routes/empresa.candidatos'
 import { Route as EmpresaNotificacoesRouteImport } from './routes/empresa.notificacoes'
+import { Route as EmpresaPerfilRouteImport } from './routes/empresa.perfil'
 import { Route as EmpresaVagasRouteImport } from './routes/empresa.vagas'
 import { Route as UsersRegisterRouteImport } from './routes/users/register'
 import { Route as CandidatoVagasJobIdRouteImport } from './routes/candidato.vagas_.$jobId'
@@ -153,6 +154,11 @@ const EmpresaNotificacoesRoute = EmpresaNotificacoesRouteImport.update({
   path: '/notificacoes',
   getParentRoute: () => EmpresaRoute,
 } as any)
+const EmpresaPerfilRoute = EmpresaPerfilRouteImport.update({
+  id: '/perfil',
+  path: '/perfil',
+  getParentRoute: () => EmpresaRoute,
+} as any)
 const EmpresaVagasRoute = EmpresaVagasRouteImport.update({
   id: '/vagas',
   path: '/vagas',
@@ -196,6 +202,7 @@ export interface FileRoutesByFullPath {
   '/candidato/vagas': typeof CandidatoVagasRoute
   '/empresa/candidatos': typeof EmpresaCandidatosRoute
   '/empresa/notificacoes': typeof EmpresaNotificacoesRoute
+  '/empresa/perfil': typeof EmpresaPerfilRoute
   '/empresa/vagas': typeof EmpresaVagasRoute
   '/users/register': typeof UsersRegisterRoute
   '/administrador/': typeof AdministradorIndexRoute
@@ -222,6 +229,7 @@ export interface FileRoutesByTo {
   '/candidato/vagas': typeof CandidatoVagasRoute
   '/empresa/candidatos': typeof EmpresaCandidatosRoute
   '/empresa/notificacoes': typeof EmpresaNotificacoesRoute
+  '/empresa/perfil': typeof EmpresaPerfilRoute
   '/empresa/vagas': typeof EmpresaVagasRoute
   '/users/register': typeof UsersRegisterRoute
   '/administrador': typeof AdministradorIndexRoute
@@ -252,6 +260,7 @@ export interface FileRoutesById {
   '/candidato/vagas': typeof CandidatoVagasRoute
   '/empresa/candidatos': typeof EmpresaCandidatosRoute
   '/empresa/notificacoes': typeof EmpresaNotificacoesRoute
+  '/empresa/perfil': typeof EmpresaPerfilRoute
   '/empresa/vagas': typeof EmpresaVagasRoute
   '/users/register': typeof UsersRegisterRoute
   '/administrador/': typeof AdministradorIndexRoute
@@ -283,6 +292,7 @@ export interface FileRouteTypes {
     | '/candidato/vagas'
     | '/empresa/candidatos'
     | '/empresa/notificacoes'
+    | '/empresa/perfil'
     | '/empresa/vagas'
     | '/users/register'
     | '/administrador/'
@@ -309,6 +319,7 @@ export interface FileRouteTypes {
     | '/candidato/vagas'
     | '/empresa/candidatos'
     | '/empresa/notificacoes'
+    | '/empresa/perfil'
     | '/empresa/vagas'
     | '/users/register'
     | '/administrador'
@@ -338,6 +349,7 @@ export interface FileRouteTypes {
     | '/candidato/vagas'
     | '/empresa/candidatos'
     | '/empresa/notificacoes'
+    | '/empresa/perfil'
     | '/empresa/vagas'
     | '/users/register'
     | '/administrador/'
@@ -524,6 +536,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EmpresaNotificacoesRouteImport
       parentRoute: typeof EmpresaRoute
     }
+    '/empresa/perfil': {
+      id: '/empresa/perfil'
+      path: '/perfil'
+      fullPath: '/empresa/perfil'
+      preLoaderRoute: typeof EmpresaPerfilRouteImport
+      parentRoute: typeof EmpresaRoute
+    }
     '/empresa/vagas': {
       id: '/empresa/vagas'
       path: '/vagas'
@@ -600,6 +619,7 @@ const CandidatoRouteWithChildren = CandidatoRoute._addFileChildren(
 interface EmpresaRouteChildren {
   EmpresaCandidatosRoute: typeof EmpresaCandidatosRoute
   EmpresaNotificacoesRoute: typeof EmpresaNotificacoesRoute
+  EmpresaPerfilRoute: typeof EmpresaPerfilRoute
   EmpresaVagasRoute: typeof EmpresaVagasRoute
   EmpresaIndexRoute: typeof EmpresaIndexRoute
   EmpresaVagasJobIdCandidatosRoute: typeof EmpresaVagasJobIdCandidatosRoute
@@ -608,6 +628,7 @@ interface EmpresaRouteChildren {
 const EmpresaRouteChildren: EmpresaRouteChildren = {
   EmpresaCandidatosRoute: EmpresaCandidatosRoute,
   EmpresaNotificacoesRoute: EmpresaNotificacoesRoute,
+  EmpresaPerfilRoute: EmpresaPerfilRoute,
   EmpresaVagasRoute: EmpresaVagasRoute,
   EmpresaIndexRoute: EmpresaIndexRoute,
   EmpresaVagasJobIdCandidatosRoute: EmpresaVagasJobIdCandidatosRoute,

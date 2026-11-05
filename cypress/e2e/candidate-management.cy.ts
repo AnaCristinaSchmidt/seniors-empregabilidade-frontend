@@ -219,6 +219,8 @@ describe("company candidate management", () => {
       .should("deep.equal", { status: "hired" });
     cy.contains("Status atualizado para Selecionado.").should("be.visible");
     cy.contains("button", "Avançar para seleção").should("not.exist");
+    // The confirmation fades out; axe would measure its half-transparent text.
+    cy.get('[role="alertdialog"]').should("not.exist");
     cy.injectAxe();
     cy.checkA11y(undefined, WCAG);
     switchToCandidate();

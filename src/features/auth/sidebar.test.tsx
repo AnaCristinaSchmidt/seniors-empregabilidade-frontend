@@ -120,15 +120,22 @@ describe("Sidebar", () => {
     expect(myJobs).toHaveAttribute("aria-current", "page");
   });
 
+  it("links Perfil to the company profile", () => {
+    pathname = "/empresa/perfil";
+    render(<Sidebar userType="company" />);
+
+    const profile = screen.getByRole("link", { name: "Perfil" });
+    expect(profile).toHaveAttribute("href", "/empresa/perfil");
+    expect(profile).toHaveAttribute("aria-current", "page");
+  });
+
   it("shows the remaining company nav items as static text", () => {
     render(<Sidebar userType="company" />);
 
-    ["Relatórios", "Perfil"].forEach((label) => {
-      expect(screen.getByText(label)).toBeVisible();
-      expect(
-        screen.queryByRole("link", { name: label }),
-      ).not.toBeInTheDocument();
-    });
+    expect(screen.getByText("Relatórios")).toBeVisible();
+    expect(
+      screen.queryByRole("link", { name: "Relatórios" }),
+    ).not.toBeInTheDocument();
   });
 
   it("links administrator pages and keeps the remaining items static", () => {
