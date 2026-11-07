@@ -9,7 +9,10 @@ import { Input } from "@/components/ui/input";
 import { jobSearchQueryOptions } from "./job-search";
 import type { JobSearchResult, WorkMode } from "./job-search-schema";
 import { JobVacancyDetailModal } from "./job-vacancy-detail-modal";
-import { formatMissingSkills } from "./job-vacancy-format";
+import {
+  formatCompanyContext,
+  formatMissingSkills,
+} from "./job-vacancy-format";
 
 const WORK_MODE_LABELS: Record<WorkMode, string> = {
   onsite: "Presencial",
@@ -141,6 +144,11 @@ function JobCard({
   job: JobSearchResult;
   onView: (job: JobSearchResult, trigger: HTMLButtonElement) => void;
 }) {
+  const companyContext = formatCompanyContext(
+    job.company_industry,
+    job.company_city,
+  );
+
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border bg-background p-6">
       <div className="flex items-start gap-3">
@@ -148,6 +156,9 @@ function JobCard({
         <div>
           <h2 className="text-xl font-bold text-foreground">{job.title}</h2>
           <p className="text-lg text-foreground-2">{job.company_name}</p>
+          {companyContext ? (
+            <p className="text-base text-muted-foreground">{companyContext}</p>
+          ) : null}
         </div>
       </div>
 

@@ -75,6 +75,16 @@ function detailRequests(): string[] {
 }
 
 describe("JobVacancyDetailPage", () => {
+  it("shows the company's industry and city", async () => {
+    mountPage({
+      ...jobDetail,
+      company_industry: "Logística",
+      company_city: "Canoas",
+    });
+
+    expect(await screen.findByText("Logística · Canoas")).toBeVisible();
+  });
+
   it("enables applying when the detail says the job is open", async () => {
     mountPage(jobDetail);
 

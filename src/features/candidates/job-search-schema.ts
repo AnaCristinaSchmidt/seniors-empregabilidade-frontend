@@ -24,6 +24,10 @@ export const jobSearchResultSchema = z.object({
   id: z.string(),
   title: z.string(),
   company_name: z.string(),
+  // Read live from the company profile (US-30). Absent while a backend without
+  // these fields is deployed.
+  company_industry: z.string().nullish(),
+  company_city: z.string().nullish(),
   location: z.string().nullable(),
   work_mode: workModeSchema,
   salary_max: decimalAsNumber.nullable(),

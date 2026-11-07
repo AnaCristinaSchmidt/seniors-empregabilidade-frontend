@@ -16,7 +16,11 @@ import { jobDetailQueryKey, jobDetailQueryOptions } from "./job-detail";
 import type { JobDetail } from "./job-detail-schema";
 import { applyToJobVacancy } from "./job-vacancies-api";
 import { applyToJobVacancyErrorMessage } from "./job-vacancy-errors";
-import { companyInitials, formatVacancyMeta } from "./job-vacancy-format";
+import {
+  companyInitials,
+  formatCompanyContext,
+  formatVacancyMeta,
+} from "./job-vacancy-format";
 
 export interface JobVacancyMatchSummary {
   matchedCount: number;
@@ -78,6 +82,9 @@ export function JobVacancyDetail({
       : "Consulte as informações e o prazo para candidatura.";
   const title = detail.isError || !vacancy ? "Detalhes da vaga" : vacancy.title;
   const showIdentity = Boolean(vacancy) && !detail.isError;
+  const companyContext = vacancy
+    ? formatCompanyContext(vacancy.company_industry, vacancy.company_city)
+    : "";
 
   const applyButton = (
     <Button
@@ -111,7 +118,7 @@ export function JobVacancyDetail({
             meta={meta}
             surface={surface}
             {...(showIdentity && vacancy?.company_name
-              ? { companyName: vacancy.company_name }
+              ? { companyName: vacancy.company_name, companyContext }
               : {})}
             closeButton={
               <DialogClose
@@ -136,6 +143,7 @@ export function JobVacancyDetail({
           meta={meta}
           surface={surface}
           companyName={vacancy.company_name}
+          companyContext={companyContext}
         />
       ) : null}
 
@@ -249,12 +257,14 @@ function DetailHeading({
   meta,
   surface,
   companyName,
+  companyContext,
   closeButton,
 }: {
   title: string;
   meta: string;
   surface: "dialog" | "page";
   companyName?: string;
+  companyContext?: string;
   closeButton?: ReactNode;
 }) {
   return (
@@ -278,6 +288,9 @@ function DetailHeading({
             <p className="mt-1 text-base text-muted-foreground">
               {companyName}
             </p>
+          ) : null}
+          {companyContext ? (
+            <p className="text-base text-muted-foreground">{companyContext}</p>
           ) : null}
           {surface === "dialog" ? (
             <DialogDescription className="mt-1 text-base">

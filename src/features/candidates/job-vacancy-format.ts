@@ -72,6 +72,14 @@ export function formatPublishedLabel(
   return `publicada há ${days} dias`;
 }
 
+/** "Tecnologia · Porto Alegre"; empty when the company has neither. */
+export function formatCompanyContext(
+  industry: string | null | undefined,
+  city: string | null | undefined,
+): string {
+  return [industry, city].filter(Boolean).join(" · ");
+}
+
 export function formatVacancyMeta(
   vacancy: JobDetail,
   salaryMax?: number | null,

@@ -70,6 +70,22 @@ describe("JobSearchView", () => {
     expect(screen.getByText(/Falta certificação NR-11/)).toBeVisible();
   });
 
+  it("shows the company's industry and city when it has them", async () => {
+    vi.spyOn(apiClient, "get").mockResolvedValueOnce({
+      data: [
+        {
+          ...baseJob,
+          company_industry: "Logística",
+          company_city: "Canoas",
+        },
+      ],
+    });
+
+    render(<JobSearchView />);
+
+    expect(await screen.findByText("Logística · Canoas")).toBeVisible();
+  });
+
   it("shows a clear empty state when nothing matches", async () => {
     vi.spyOn(apiClient, "get").mockResolvedValueOnce({ data: [] });
 

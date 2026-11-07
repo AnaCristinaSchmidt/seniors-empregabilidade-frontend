@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   companyInitials,
+  formatCompanyContext,
   formatPublishedLabel,
   formatSalaryRange,
   formatVacancyMeta,
@@ -16,6 +17,23 @@ describe("companyInitials", () => {
 
   it("uses the first two letters of a single word", () => {
     expect(companyInitials("Acme")).toBe("AC");
+  });
+});
+
+describe("formatCompanyContext", () => {
+  it("joins the industry and the city", () => {
+    expect(formatCompanyContext("Tecnologia", "Porto Alegre")).toBe(
+      "Tecnologia · Porto Alegre",
+    );
+  });
+
+  it("keeps whichever one the company has", () => {
+    expect(formatCompanyContext(null, "Porto Alegre")).toBe("Porto Alegre");
+    expect(formatCompanyContext("Tecnologia", undefined)).toBe("Tecnologia");
+  });
+
+  it("is empty when the company has neither", () => {
+    expect(formatCompanyContext(null, null)).toBe("");
   });
 });
 

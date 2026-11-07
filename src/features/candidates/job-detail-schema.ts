@@ -6,6 +6,10 @@ export const jobDetailSchema = z.object({
   description: z.string(),
   company_id: z.uuid(),
   company_name: z.string(),
+  // Read live from the company profile (US-30). Absent while a backend without
+  // these fields is deployed.
+  company_industry: z.string().nullish(),
+  company_city: z.string().nullish(),
   skills: z.array(
     z.object({
       id: z.uuid(),
