@@ -1,6 +1,9 @@
 import { getRouteApi, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { z } from "zod";
 
+import { ContactProfessionalDialog } from "../contact-professional/contact-professional-dialog";
+import type { JobApplicant } from "./professional-ranking";
 import { ProfessionalRankingView } from "./professional-ranking-view";
 
 // Acessa os params da rota pelo id, sem importar o arquivo da rota
@@ -17,6 +20,7 @@ export function ProfessionalRankingPage() {
   // Validamos em runtime: não dependemos do tipo que o router devolve.
   const params: unknown = routeApi.useParams();
   const parsed = paramsSchema.safeParse(params);
+  const [contactTarget, setContactTarget] = useState<JobApplicant | null>(null);
 
   if (!parsed.success) {
     return (
@@ -35,7 +39,20 @@ export function ProfessionalRankingPage() {
       >
         Gerenciar candidaturas desta vaga
       </Link>
-      <ProfessionalRankingView jobId={parsed.data.jobId} />
+      <ProfessionalRankingView
+        jobId={parsed.data.jobId}
+        onContact={setContactTarget}
+      />
+      {contactTarget ? (
+        <ContactProfessionalDialog
+          // Remonta o formulário ao trocar de profissional.
+          key={contactTarget.profile.candidate_id}
+          jobId={parsed.data.jobId}
+          candidateId={contactTarget.profile.candidate_id}
+          professionalName={contactTarget.profile.full_name}
+          onClose={() => setContactTarget(null)}
+        />
+      ) : null}
     </>
   );
 }

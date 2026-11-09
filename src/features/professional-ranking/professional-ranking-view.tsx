@@ -20,11 +20,14 @@ interface ProfessionalRankingViewProps {
    * endpoint que libere o currículo para a empresa.
    */
   onViewResume?: (applicant: JobApplicant) => void;
+  /** Ação do botão "Entrar em contato" (US-29). Sem ela o botão não aparece. */
+  onContact?: (applicant: JobApplicant) => void;
 }
 
 export function ProfessionalRankingView({
   jobId,
   onViewResume,
+  onContact,
 }: ProfessionalRankingViewProps) {
   const { data, isPending, isError, refetch } = useQuery(
     jobApplicantsQueryOptions(jobId),
@@ -67,6 +70,7 @@ export function ProfessionalRankingView({
               (item) => originFilter === "all" || item.origin === originFilter,
             )}
             onViewResume={onViewResume}
+            onContact={onContact}
           />
         </>
       )}
@@ -78,10 +82,12 @@ function RankingTable({
   applicants,
   hasApplicants,
   onViewResume,
+  onContact,
 }: {
   applicants: JobApplicant[];
   hasApplicants: boolean;
   onViewResume: ((applicant: JobApplicant) => void) | undefined;
+  onContact: ((applicant: JobApplicant) => void) | undefined;
 }) {
   if (applicants.length === 0) {
     return (
@@ -92,6 +98,8 @@ function RankingTable({
       </p>
     );
   }
+
+  const hasActions = Boolean(onViewResume ?? onContact);
 
   return (
     <div className="overflow-x-auto">
@@ -110,9 +118,9 @@ function RankingTable({
             <th scope="col" className="px-3 py-3">
               Requisitos atendidos
             </th>
-            {/* Sem ação de currículo ainda, a coluna some em vez de mostrar um
-                botão que não faz nada. */}
-            {onViewResume ? (
+            {/* Sem nenhuma ação, a coluna some em vez de mostrar um botão que
+                não faz nada. */}
+            {hasActions ? (
               <th scope="col" className="px-3 py-3">
                 <span className="sr-only">Ações</span>
               </th>
@@ -126,6 +134,7 @@ function RankingTable({
               applicant={applicant}
               position={index + 1}
               onViewResume={onViewResume}
+              onContact={onContact}
             />
           ))}
         </tbody>
@@ -199,10 +208,12 @@ function RankingRow({
   applicant,
   position,
   onViewResume,
+  onContact,
 }: {
   applicant: JobApplicant;
   position: number;
   onViewResume: ((applicant: JobApplicant) => void) | undefined;
+  onContact: ((applicant: JobApplicant) => void) | undefined;
 }) {
   const { profile, compatibility_percentage: percentage } = applicant;
   const highlighted = applicant.is_highlighted;
@@ -269,18 +280,28 @@ function RankingRow({
           </p>
         ) : null}
       </td>
-      {onViewResume ? (
+      {(onViewResume ?? onContact) ? (
         <td className="px-3 py-4">
-          {/* Disponível para todos, inclusive abaixo de 50%. */}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onViewResume(applicant)}
-          >
-            {/* Space outside the span, or the name reads "currículode". */}
-            Ver currículo{" "}
-            <span className="sr-only">de {profile.full_name}</span>
-          </Button>
+          {/* Disponíveis para todos, inclusive abaixo de 50%. */}
+          <div className="flex flex-wrap gap-2">
+            {onViewResume ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onViewResume(applicant)}
+              >
+                {/* Space outside the span, or the name reads "currículode". */}
+                Ver currículo{" "}
+                <span className="sr-only">de {profile.full_name}</span>
+              </Button>
+            ) : null}
+            {onContact ? (
+              <Button type="button" onClick={() => onContact(applicant)}>
+                Entrar em contato{" "}
+                <span className="sr-only">com {profile.full_name}</span>
+              </Button>
+            ) : null}
+          </div>
         </td>
       ) : null}
     </tr>

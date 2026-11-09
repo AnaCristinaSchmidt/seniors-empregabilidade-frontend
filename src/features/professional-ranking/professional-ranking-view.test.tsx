@@ -56,9 +56,12 @@ beforeEach(() => {
   getMock.mockResolvedValue({ data: PAYLOAD });
 });
 
-function renderView(
-  onViewResume?: (applicant: { profile: { full_name: string } }) => void,
-) {
+type ResumeHandler = (applicant: { profile: { full_name: string } }) => void;
+type ContactHandler = (applicant: {
+  profile: { full_name: string; candidate_id: string };
+}) => void;
+
+function renderView(onViewResume?: ResumeHandler, onContact?: ContactHandler) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -68,6 +71,7 @@ function renderView(
       <ProfessionalRankingView
         jobId="job-1"
         {...(onViewResume ? { onViewResume } : {})}
+        {...(onContact ? { onContact } : {})}
       />
     </QueryClientProvider>,
   );
@@ -150,6 +154,108 @@ describe("ProfessionalRankingView", () => {
     expect(
       screen.queryByRole("columnheader", { name: "Ações" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("não mostra botão de contato sem a ação", async () => {
+    renderView();
+
+    await screen.findByText("Marcos Silveira");
+
+    expect(
+      screen.queryByRole("button", { name: /Entrar em contato/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("mostra a coluna de ações só com contato, sem botão de currículo", async () => {
+    renderView(undefined, vi.fn());
+
+    await screen.findByText("Marcos Silveira");
+
+    expect(
+      screen.getByRole("columnheader", { name: "Ações" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: /Entrar em contato/ }),
+    ).toHaveLength(5);
+    expect(
+      screen.queryByRole("button", { name: /Ver currículo/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("mostra currículo e contato lado a lado quando as duas ações existem", async () => {
+    renderView(vi.fn(), vi.fn());
+
+    const row = (await screen.findByText("Marcos Silveira")).closest(
+      "tr",
+    ) as HTMLElement;
+
+    expect(
+      within(row).getByRole("button", {
+        name: "Ver currículo de Marcos Silveira",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(row).getByRole("button", {
+        name: "Entrar em contato com Marcos Silveira",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("entrega o profissional certo ao contato, inclusive abaixo de 50%", async () => {
+    const onContact = vi.fn();
+    const user = userEvent.setup();
+    renderView(undefined, onContact);
+
+    const row = (await screen.findByText("Antônio Ferraz")).closest(
+      "tr",
+    ) as HTMLElement;
+    await user.click(
+      within(row).getByRole("button", {
+        name: "Entrar em contato com Antônio Ferraz",
+      }),
+    );
+
+    expect(onContact).toHaveBeenCalledOnce();
+    const [clicked] = onContact.mock.lastCall as [
+      { profile: { full_name: string; candidate_id: string } },
+    ];
+    expect(clicked.profile.full_name).toBe("Antônio Ferraz");
+    expect(clicked.profile.candidate_id).toBe("c-a-5");
+  });
+
+  it("permite contato com match automático, que não tem candidatura", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        ...PAYLOAD,
+        automatic_match_count: 1,
+        applicants: [
+          applicant(
+            "a-7",
+            "Paula Auto",
+            "60.00",
+            3,
+            5,
+            "Canoas",
+            "RS",
+            "automatic_match",
+          ),
+        ],
+      },
+    });
+    const onContact = vi.fn();
+    const user = userEvent.setup();
+    renderView(undefined, onContact);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Entrar em contato com Paula Auto",
+      }),
+    );
+
+    const [clicked] = onContact.mock.lastCall as [
+      { profile: { full_name: string; candidate_id: string } },
+    ];
+    expect(clicked.profile.candidate_id).toBe("c-a-7");
   });
 
   it("nomeia as competências que formam o percentual", async () => {
